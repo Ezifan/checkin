@@ -112,6 +112,7 @@
   .kv{display:flex;justify-content:space-between;font-size:13.5px;padding:7px 0;border-bottom:1px solid #f0f3f1;color:var(--ink2);}
   .kv:last-child{border-bottom:none;}
   .kv b{color:var(--ink);font-weight:600;text-align:right;}
+  .kv .sub{font-size:12px;color:var(--ink3);padding-left:10px;}
   .badge{display:inline-block;font-size:11px;background:var(--soft);color:var(--accent);
     padding:2px 8px;border-radius:20px;font-weight:600;margin-left:6px;}
 
@@ -170,6 +171,7 @@
     <div class="date" id="date"></div>
     <h1 id="headline">今天</h1>
     <div class="streak" id="streak">连续 0 天全完成</div>
+    <div class="hint" id="planhint" style="display:none;margin-top:6px"></div>
   </header>
 
   <!-- 今天 -->
@@ -225,12 +227,25 @@
   <!-- 计划 -->
   <div class="page" id="page-plan">
     <section class="card">
+      <div class="card-title"><b>计划进度</b><span id="progStage">未开始</span></div>
+      <div class="kv"><span>起始日</span><b>10 月 23 日 · 周五</b></div>
+      <div class="kv"><span>现在</span><b id="progWeek">尚未开始</b></div>
+      <div class="kv"><span>本周区间</span><b id="progRange">10/23 – 10/29</b></div>
+      <div class="kv"><span>八周结束</span><b>12 月 17 日</b></div>
+      <div class="hint" style="margin-top:6px">第 1 周 = 10/23–10/29，之后每 7 天一翻，周三仍算一周里最累的一天。</div>
+    </section>
+
+    <section class="card">
       <div class="sec">
         <h3>八周里程碑 <span class="badge">Python</span></h3>
         <div class="kv"><span>第 1–2 周</span><b>课上代码独立重敲一遍</b></div>
+        <div class="kv"><span class="sub">10/23 – 11/5</span><b></b></div>
         <div class="kv"><span>第 3–4 周</span><b>每周 2 道独立题</b></div>
+        <div class="kv"><span class="sub">11/6 – 11/19</span><b></b></div>
         <div class="kv"><span>第 5–6 周</span><b>读写 csv 文件</b></div>
+        <div class="kv"><span class="sub">11/20 – 12/3</span><b></b></div>
         <div class="kv"><span>第 7–8 周</span><b>第一个小工具</b></div>
+        <div class="kv"><span class="sub">12/4 – 12/17</span><b></b></div>
       </div>
       <div class="hint" style="margin-top:6px">明确不做：提前学框架、刷 LeetCode、看 50 集长课、买付费课。</div>
     </section>
@@ -483,10 +498,20 @@
     var w=["周日","周一","周二","周三","周四","周五","周六"][d.getDay()];
     document.getElementById("date").textContent=(d.getMonth()+1)+"月"+d.getDate()+"日 "+w;
     document.getElementById("headline").textContent=PLAN[d.getDay()].head;
+    var ph=document.getElementById("planhint");
+    if(ph){
+      if(today()<PLAN_START_KEY){
+        ph.style.display="block";
+        ph.textContent="计划明天（10/23）开始计时，今天先把作业做完就行。";
+      } else {
+        ph.style.display="none";
+      }
+    }
   }
 
   function prevDay(k){ var d=new Date(k+"T12:00:00"); d.setDate(d.getDate()-1); return fmt(d); }
   function isDoneDay(k){
+    if(k<PLAN_START_KEY) return false;
     var t=(DB.days[k]&&DB.days[k].tasks)||{};
     var wd=new Date(k+"T12:00:00").getDay();
     if(wd===3) return !!(t.hw&&t.sleep);
@@ -703,10 +728,40 @@
     });
   });
 
+  // 计划整体从 2026-10-23（周五）起算，每 7 天一周
+  var PLAN_START = new Date(2026,9,23);
+  var PLAN_START_KEY = "2026-10-23";
+  function addDays(d,n){ var x=new Date(d.getTime()); x.setDate(x.getDate()+n); return x; }
+  function md(d){ return (d.getMonth()+1)+"/"+d.getDate(); }
+  function renderProg(){
+    var t=new Date(); t.setHours(0,0,0,0);
+    var diff=Math.floor((t.getTime()-PLAN_START.getTime())/86400000);
+    var n = diff<0 ? 0 : Math.floor(diff/7)+1;
+    var s = addDays(PLAN_START, Math.max(0,n-1)*7);
+    var e = addDays(s,6);
+    var wk=document.getElementById("progWeek");
+    var rg=document.getElementById("progRange");
+    var st=document.getElementById("progStage");
+    if(!wk) return;
+    if(n===0){
+      wk.textContent="尚未开始 · 明天起第 1 周";
+      rg.textContent="10/23 – 10/29";
+      st.textContent="倒计时 "+Math.abs(diff)+" 天";
+    } else if(n<=8){
+      wk.textContent="第 "+n+" 周";
+      rg.textContent=md(s)+" – "+md(e);
+      st.textContent=n<=2?"打基础":n<=4?"独立做题":n<=6?"读写文件":"做小工具";
+    } else {
+      wk.textContent="八周已走完";
+      rg.textContent="12/17 结束";
+      st.textContent="进入复习期";
+    }
+  }
+
   function renderAll(){
     renderDate(); renderTasks(); renderStreak();
     renderNow(); renderTimeline();
-    renderWeek(); renderWeekTable(); renderWeight(); renderForms();
+    renderWeek(); renderWeekTable(); renderWeight(); renderForms(); renderProg();
     if(!storageOK) document.getElementById("banner").style.display="block";
   }
 
