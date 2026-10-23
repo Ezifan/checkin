@@ -1,0 +1,1447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#eaf7ff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>像素 Python · 翔安冒险</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overscroll-behavior:none}
+  body{
+    background:linear-gradient(180deg,#eaf7ff 0%,#f4fbf4 52%,#fff7ea 100%);
+    background-attachment:fixed;color:#4a3f55;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    overflow-x:hidden;user-select:none;
+  }
+  button{font-family:inherit}
+  /* ---------- 飘云 ---------- */
+  .sky{position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0}
+  .cloud{position:absolute;left:0;width:120px;height:60px;background-repeat:no-repeat;
+    background-size:100% 100%;image-rendering:pixelated;opacity:.9;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 5' shape-rendering='crispEdges'%3E%3Crect x='4' y='0' width='4' height='1' fill='%23ffffff'/%3E%3Crect x='2' y='1' width='8' height='1' fill='%23ffffff'/%3E%3Crect x='0' y='2' width='10' height='1' fill='%23ffffff'/%3E%3Crect x='1' y='3' width='8' height='1' fill='%23ffffff'/%3E%3C/svg%3E");
+    filter:drop-shadow(0 3px 0 rgba(170,200,225,.22));
+    animation:drift linear infinite}
+  .c1{top:6%;width:130px;height:65px;animation-duration:58s}
+  .c2{top:17%;width:86px;height:43px;animation-duration:78s;animation-delay:-30s;opacity:.7}
+  .c3{top:1%;width:62px;height:31px;animation-duration:100s;animation-delay:-60s;opacity:.5}
+  .c4{top:30%;width:150px;height:75px;animation-duration:112s;animation-delay:-12s;opacity:.4}
+  @keyframes drift{from{transform:translateX(-22vw)}to{transform:translateX(122vw)}}
+  @media (prefers-reduced-motion: reduce){.cloud{animation:none}}
+
+  /* ---------- 骨架 ---------- */
+  .app{position:relative;z-index:1;display:flex;flex-direction:column;
+    height:100vh;height:100dvh;max-width:520px;margin:0 auto}
+  header{flex:none;display:flex;align-items:center;gap:8px;
+    padding:8px 12px;padding-top:calc(8px + env(safe-area-inset-top));
+    background:rgba(255,255,255,.82);backdrop-filter:blur(8px);
+    border-bottom:2px dashed #ffe0e8}
+  .brand{display:flex;align-items:center;gap:7px;min-width:0}
+  .brand .logo{width:30px;height:30px;flex:0 0 30px}
+  .brand .logo svg{width:100%;height:100%;image-rendering:pixelated}
+  .brand .txt{font-weight:800;font-size:14px;letter-spacing:.5px;color:#ff7f9b;line-height:1.15;white-space:nowrap}
+  .brand .txt small{display:block;font-size:10px;font-weight:500;color:#a89cb8;letter-spacing:0}
+  .hbtns{margin-left:auto;display:flex;gap:6px}
+  .hbtns button{background:#fff;border:2px solid #ffe0e8;color:#e0698a;
+    font-size:12px;font-weight:700;padding:7px 10px;border-radius:10px;
+    box-shadow:0 2px 0 #ffe0e8;cursor:pointer}
+  .hbtns button:active{transform:translateY(1px);box-shadow:0 1px 0 #ffe0e8}
+
+  /* ---------- 地图 ---------- */
+  .stage{flex:none;padding:8px 12px 0}
+  .lvline{display:flex;align-items:baseline;gap:8px;margin:0 2px 7px;font-size:12px;color:#9a8fab}
+  .lvline b{font-size:13px;color:#4a3f55;letter-spacing:.3px}
+  .lvline .cnt{margin-left:auto;font-size:11px;color:#a89cb8}
+  .mapFrame{background:#fff;border:3px solid #fff;border-radius:18px;padding:5px;
+    box-shadow:0 5px 0 #ffe6ee,0 10px 22px rgba(140,110,160,.13);
+    width:min(88vw,320px,40vh);margin:0 auto}
+  .map{--ground:#a8de7d;display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(3,1fr);
+    gap:3px;aspect-ratio:5/3;width:100%}
+  .tile{position:relative;border-radius:6px;overflow:hidden;background:#f4eff9;
+    box-shadow:inset 0 0 0 2px #fff;transition:background .25s}
+  .tile.explored{background:var(--ground)}
+  .tile.explored::after{content:"";position:absolute;inset:0;
+    background-image:radial-gradient(rgba(255,255,255,.55) 1px,transparent 1px);
+    background-size:10px 10px;opacity:.5;pointer-events:none}
+  .tile svg{width:82%;height:82%;image-rendering:pixelated;pointer-events:none}
+  .tile .deco{position:absolute;left:4%;bottom:4%;width:34%;height:34%;opacity:.75}
+  .tile .pl{position:absolute;inset:0;display:grid;place-items:center;z-index:3;
+    transition:transform .1s}
+  .tile .pl svg{width:74%;height:74%}
+  .tile .pet{position:absolute;right:6%;bottom:6%;width:36%;height:36%;z-index:4}
+  .tile .pet svg{width:100%;height:100%}
+  .tile .mon{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;z-index:3;transition:transform .35s,opacity .35s}
+  .tile .mon svg{width:66%;height:66%}
+  .tile .mon.hit{animation:mshake .16s 2}
+  @keyframes mshake{0%,100%{transform:translateX(0)}50%{transform:translateX(6%)}}
+  .tile .mon.poof{transform:scale(.2) rotate(8deg);opacity:0}
+  .mhp{display:flex;gap:2px;margin-bottom:2px}
+  .mhp i{display:block;width:7px;height:7px;border-radius:2px;background:#ff7f9b;
+    box-shadow:0 0 0 1px #fff}
+  .mhp i.off{background:#fff;opacity:.65}
+  .spark{position:absolute;width:6px;height:6px;border-radius:2px;background:#ffe066;z-index:5;
+    animation:sparkfly .6s ease-out forwards}
+  @keyframes sparkfly{0%{transform:translate(0,0) scale(1);opacity:1}
+    100%{transform:translate(var(--dx),var(--dy)) scale(.2);opacity:0}}
+  .bob{animation:bob 1.6s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-7%)}}
+  @media (prefers-reduced-motion: reduce){.bob,.tile .mon.hit{animation:none}}
+
+  /* ---------- 任务 ---------- */
+  .quest{flex:none;padding:9px 14px 0;max-height:24vh;overflow:auto}
+  .qhead{display:flex;align-items:center;gap:8px;font-size:11px;color:#8fbf9f;letter-spacing:.5px}
+  .qhead button{margin-left:auto;background:#fff;border:1px solid #e6efe8;color:#7fae8f;
+    font-size:11px;padding:3px 8px;border-radius:8px;cursor:pointer}
+  .story{margin:4px 0 3px;font-size:12.5px;line-height:1.55;color:#8a7f9c}
+  .goal{margin:0;font-size:13px;line-height:1.55;color:#4a3f55;font-weight:600}
+  .hint{margin:5px 0 0;font-size:11.5px;line-height:1.6;color:#b07b1e;background:#fff7dd;
+    border:1px solid #ffe6b0;border-radius:9px;padding:6px 8px}
+
+  /* ---------- 编辑器 ---------- */
+  .editArea{flex:1;min-height:0;display:flex;flex-direction:column;padding:8px 12px;
+    padding-bottom:calc(8px + env(safe-area-inset-bottom));gap:6px}
+  .snips{flex:none;display:flex;gap:5px;overflow-x:auto;overflow-y:hidden;
+    padding-bottom:2px;scrollbar-width:none}
+  .snips::-webkit-scrollbar{display:none}
+  .snip{flex:0 0 auto;background:#fff;border:1.5px solid #ece8f5;color:#6f6486;
+    font-family:Consolas,"Courier New",monospace;font-size:12px;padding:6px 9px;border-radius:9px;
+    box-shadow:0 2px 0 #efeaf6;cursor:pointer;white-space:nowrap}
+  .snip:active{transform:translateY(1px);box-shadow:0 1px 0 #efeaf6}
+  .snip.hl{border-color:#c4e8d4;color:#3f9e6d;background:#f2fbf6}
+  .codeWrap{flex:1;min-height:0;display:flex;border:2px solid #ece8f5;border-radius:14px;
+    background:#fbfaff;overflow:hidden;box-shadow:inset 0 1px 0 #fff}
+  #code{flex:1;width:100%;border:0;outline:none;background:transparent;resize:none;
+    padding:10px 11px;font-family:Consolas,"Courier New",monospace;font-size:16px;line-height:1.55;
+    color:#443a52;tab-size:4;min-height:80px;user-select:text}
+  .runbar{flex:none;display:flex;gap:8px}
+  .runbar .run{flex:1;background:linear-gradient(180deg,#7fe0b0,#4dc78c);border:2px solid #fff;
+    color:#fff;font-size:16px;font-weight:800;letter-spacing:2px;padding:11px;border-radius:14px;
+    box-shadow:0 4px 0 #3fa878;cursor:pointer}
+  .runbar .run:active{transform:translateY(2px);box-shadow:0 2px 0 #3fa878}
+  .runbar .run[disabled]{filter:saturate(.5) brightness(1.05);box-shadow:0 4px 0 #9fd3b8}
+  .runbar .sub{flex:0 0 auto;background:#fff;border:2px solid #ece8f5;color:#8a7f9c;
+    font-size:12px;padding:0 12px;border-radius:14px;box-shadow:0 4px 0 #efeaf6;cursor:pointer}
+
+  /* ---------- 结果提示 ---------- */
+  .result{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(12px + env(safe-area-inset-bottom));
+    width:min(94vw,480px);z-index:45;background:#fff;border-radius:16px;padding:12px 13px;
+    box-shadow:0 10px 26px rgba(120,95,140,.22);max-height:52vh;overflow:auto;
+    display:none;animation:slideup .22s ease-out}
+  .result.show{display:block}
+  @keyframes slideup{from{transform:translateX(-50%) translateY(16px);opacity:0}
+    to{transform:translateX(-50%) translateY(0);opacity:1}}
+  .result.no{border:2px solid #ffd6de}
+  .result.ok{border:2px solid #bfe9d3}
+  .rhead{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;
+    color:#e0617f;margin-bottom:6px}
+  .result.ok .rhead{color:#2f9e6f}
+  .rhead .x{margin-left:auto;background:#fbfaff;border:1px solid #ece8f5;color:#a89cb8;
+    font-size:11px;padding:3px 9px;border-radius:8px;cursor:pointer;font-weight:600}
+  .rtip{margin:0 0 6px;font-size:12.5px;line-height:1.65;color:#5d526e}
+  .rline{margin:0 0 8px;font-family:Consolas,"Courier New",monospace;font-size:12px;
+    background:#fbf8ff;border:1px dashed #e8e2f2;color:#7c6f92;padding:6px 8px;border-radius:8px;
+    white-space:pre-wrap;word-break:break-all}
+  .rline b{color:#e0617f;font-family:inherit;font-weight:700}
+  .result details{font-size:11px;color:#a89cb8}
+  .result details pre{white-space:pre-wrap;word-break:break-all;margin:4px 0 0;
+    font-size:11px;line-height:1.5;background:#faf8fd;padding:6px;border-radius:6px;color:#7c6f92}
+
+  /* ---------- 弹层 ---------- */
+  .sheet{position:fixed;inset:0;z-index:60;background:rgba(88,74,110,.32);
+    backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;
+    padding:18px 14px;padding-top:calc(18px + env(safe-area-inset-top));
+    padding-bottom:calc(18px + env(safe-area-inset-bottom))}
+  .sheet.show{display:flex}
+  .panel{width:100%;max-width:440px;max-height:100%;overflow:auto;background:#fff;
+    border:2px solid #ffe6ee;border-radius:18px;padding:15px;
+    box-shadow:0 14px 34px rgba(140,110,160,.2)}
+  .panel h3{margin:0 0 10px;font-size:15px;color:#ff7f9b;display:flex;align-items:center;gap:6px}
+  .panel h3 .x{margin-left:auto;font-size:12px;color:#a89cb8;font-weight:400;cursor:pointer;
+    background:#fbfaff;border:1px solid #ece8f5;border-radius:8px;padding:3px 9px}
+  .pk{display:flex;align-items:center;gap:8px;padding:10px;border:2px solid #ece8f5;
+    border-radius:12px;margin-bottom:8px;background:#fdfcff;cursor:pointer}
+  .pk.on{border-color:#ffb3c6;background:#fff5f8}
+  .pk .pn{flex:1;min-width:0}
+  .pk .pn b{display:block;font-size:13px;color:#4a3f55;font-weight:700;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pk .pn span{font-size:11px;color:#a89cb8}
+  .pk .pg{font-size:11px;color:#3fae7d;background:#eefaf3;border-radius:8px;padding:2px 7px;flex:0 0 auto}
+  .mini{font-size:11.5px;color:#a89cb8;line-height:1.7;margin:8px 0}
+  .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .btn{flex:1;text-align:center;background:linear-gradient(180deg,#ffd66e,#ffc23f);border:2px solid #fff;
+    color:#6a4a12;font-size:14px;font-weight:800;padding:10px;border-radius:12px;
+    box-shadow:0 3px 0 #e2a62c;cursor:pointer}
+  .btn.ghost{background:#fff;border-color:#ece8f5;color:#7d7391;font-weight:600;
+    font-size:12.5px;box-shadow:0 3px 0 #efeaf6}
+  .btn.mint{background:linear-gradient(180deg,#7fe0b0,#4dc78c);color:#fff;box-shadow:0 3px 0 #3fa878}
+  .btn:active{transform:translateY(1px)}
+  .lvGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:6px 0 4px}
+  .lv{background:#fdfcff;border:2px solid #ece8f5;border-radius:11px;padding:8px 3px;
+    text-align:center;cursor:pointer;box-shadow:0 2px 0 #efeaf6}
+  .lv b{display:block;font-size:14px;color:#4a3f55}
+  .lv small{display:block;font-size:9px;color:#b0a5c0;margin-top:2px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lv.done{border-color:#bfe9d3;background:#f2fbf6}
+  .lv.done b{color:#2f9e6f}
+  .lv.cur{border-color:#ffb3c6;background:#fff5f8}
+  .lv.lock{opacity:.42;cursor:default}
+  .chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+  .chip{font-size:10.5px;color:#b07b1e;background:#fff6d8;border:1px solid #ffe1a1;
+    padding:2px 7px;border-radius:9px}
+  .chip.pet{color:#3f6f9e;background:#eef6ff;border-color:#cfe6f7}
+  .file{display:none}
+  .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));
+    transform:translateX(-50%) translateY(14px);z-index:70;background:#fff;
+    border:2px solid #bfe9d3;color:#2f7d55;padding:8px 14px;border-radius:12px;font-size:12px;
+    box-shadow:0 6px 18px rgba(120,95,140,.16);opacity:0;pointer-events:none;
+    transition:.22s;max-width:80vw;text-align:center}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* ---------- 通关 ---------- */
+  .panel.clear{text-align:center;border-color:#ffe6ee}
+  .bigstar{width:70px;height:70px;margin:2px auto 6px;
+    filter:drop-shadow(0 4px 0 rgba(255,210,120,.35))}
+  .bigstar svg{width:100%;height:100%;image-rendering:pixelated}
+  .panel.clear h2{margin:0 0 6px;font-size:23px;letter-spacing:2px;color:#ff7f9b}
+  .cleartxt{margin:0 0 10px;font-size:12.5px;line-height:1.75;color:#8a7f9c}
+  .itemchip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;
+    background:#fff7dd;border:1px solid #ffe1a1;color:#b07b1e;padding:5px 11px;border-radius:11px}
+  .petline{display:flex;align-items:center;justify-content:center;gap:7px;margin:9px 0 0;
+    font-size:12.5px;color:#7d7391}
+  .petline .ps{width:36px;height:36px;flex:0 0 36px}
+  .petline .ps svg{width:100%;height:100%;image-rendering:pixelated}
+  .petline b{color:#ff7f9b}
+
+  /* ---------- 启动 ---------- */
+  .boot{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;
+    padding:24px;background:linear-gradient(180deg,#eaf7ff,#fff7ea)}
+  .boot .box{text-align:center;max-width:330px}
+  .boot .walk{width:150px;height:96px;margin:0 auto 12px;position:relative}
+  .boot .walk .g{position:absolute;left:0;right:0;bottom:6px;height:8px;border-radius:4px;background:#d8f0e2}
+  .boot .walk .act{position:absolute;bottom:12px;width:54px;height:54px;animation:walkx 2.4s ease-in-out infinite}
+  .boot .walk .act svg{width:100%;height:100%;image-rendering:pixelated}
+  @keyframes walkx{0%,100%{left:8%}50%{left:64%}}
+  .boot h2{margin:0 0 6px;font-size:16px;color:#ff7f9b;letter-spacing:1px}
+  .boot p{margin:0;font-size:12px;line-height:1.8;color:#9a8fab}
+  .dots{display:inline-flex;gap:5px;margin-top:12px}
+  .dots i{width:8px;height:8px;border-radius:2px;background:#9fd8b8;animation:blink 1s infinite}
+  .dots i:nth-child(2){animation-delay:.18s;background:#ffd07e}
+  .dots i:nth-child(3){animation-delay:.36s;background:#ffa9bd}
+  @keyframes blink{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-4px)}}
+  .boot .btns{display:none;gap:8px;margin-top:14px;justify-content:center}
+  .boot.error .dots{display:none}
+  .boot.error .btns{display:flex}
+  .boot .btns button{background:#fff;border:2px solid #ffe0e8;color:#e0698a;font-size:12.5px;
+    font-weight:700;padding:9px 16px;border-radius:11px;box-shadow:0 3px 0 #ffe0e8;cursor:pointer}
+  .boot.hide{display:none}
+</style>
+</head>
+<body>
+<div class="sky">
+  <div class="cloud c1"></div><div class="cloud c2"></div>
+  <div class="cloud c3"></div><div class="cloud c4"></div>
+</div>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="logo" id="brandLogo"></div>
+      <div class="txt">像素 Python<small>翔安冒险 · 本机存档</small></div>
+    </div>
+    <div class="hbtns">
+      <button id="btnLevels">关卡</button>
+      <button id="btnPacks">关卡包</button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <div class="lvline">
+      <b id="lvName">第 1 关</b>
+      <span id="lvScene">校门口</span>
+      <span class="cnt" id="lvCnt">已通关 0 / 20</span>
+    </div>
+    <div class="mapFrame"><div class="map" id="map"></div></div>
+  </div>
+
+  <div class="quest">
+    <div class="qhead"><span>任务目标</span><button id="btnHint">看提示</button></div>
+    <p class="story" id="story"></p>
+    <p class="goal" id="goal"></p>
+    <p class="hint" id="hint" hidden></p>
+  </div>
+
+  <div class="editArea">
+    <div class="snips" id="snips"></div>
+    <div class="codeWrap"><textarea id="code" spellcheck="false" autocapitalize="off"
+      autocorrect="off" autocomplete="off" enterkeyhint="enter" aria-label="代码编辑区"></textarea></div>
+    <div class="runbar">
+      <button class="run" id="btnRun">运 行</button>
+      <button class="sub" id="btnReset">还原</button>
+    </div>
+  </div>
+</div>
+
+<div class="result" id="result">
+  <div class="rhead"><span id="rTitle">再试一次</span><button class="x" id="rClose">收起</button></div>
+  <p class="rtip" id="rTip"></p>
+  <pre class="rline" id="rLine" hidden></pre>
+  <details id="rRawWrap" hidden><summary>运行细节</summary><pre id="rRaw"></pre></details>
+</div>
+
+<div class="sheet" id="clearSheet">
+  <div class="panel clear">
+    <div class="bigstar" id="clearStar"></div>
+    <h2 id="clearH">通关！</h2>
+    <p class="cleartxt" id="clearTxt"></p>
+    <div class="itemchip" id="clearItem"></div>
+    <div class="petline" id="clearPet" hidden><span class="ps" id="petSprite"></span>
+      <span>小企鹅 <b>小布若</b> 加入了你的队伍</span></div>
+    <div class="actions">
+      <button class="btn ghost" id="btnStay">再练一会儿</button>
+      <button class="btn mint" id="btnNext">下一关</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="packSheet">
+  <div class="panel">
+    <h3>关卡包<span class="x" id="packClose">关闭</span></h3>
+    <div id="packList"></div>
+    <div class="chips" id="itemChips"></div>
+    <p class="mini" id="packNote"></p>
+    <div class="actions">
+      <button class="btn ghost" id="btnImport">导入自定义关卡</button>
+      <button class="btn ghost" id="btnTpl">下载模板</button>
+    </div>
+    <input type="file" id="fileInput" class="file" accept="application/json,.json">
+  </div>
+</div>
+
+<div class="sheet" id="lvSheet">
+  <div class="panel">
+    <h3>选择关卡<span class="x" id="lvClose">关闭</span></h3>
+    <div class="lvGrid" id="lvGrid"></div>
+    <p class="mini">按顺序解锁，通关后可以随时回来重练。进度只保存在这台设备上。</p>
+  </div>
+</div>
+
+<div class="boot" id="boot">
+  <div class="box">
+    <div class="walk">
+      <div class="g"></div>
+      <div class="act" id="bootHero"></div>
+    </div>
+    <h2 id="bootTitle">正在唤醒 Python 引擎</h2>
+    <p id="bootMsg">第一次进入需要下载约 10MB 的引擎，之后会快很多。<br>不需要注册，也不会向任何地方上传数据。</p>
+    <div class="dots"><i></i><i></i><i></i></div>
+    <div class="btns">
+      <button id="btnRetry">重试</button>
+      <button id="btnSkip">先看看关卡</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================
+   1. 像素素材
+   ========================================================= */
+function svg(inner, vb){
+  return '<svg viewBox="' + (vb || '0 0 8 8') + '" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">' + inner + '</svg>';
+}
+var SPR = {
+  hero: svg('<rect x="2" y="0" width="4" height="1" fill="#6fb1e8"/><rect x="1" y="1" width="6" height="1" fill="#6fb1e8"/><rect x="2" y="2" width="4" height="2" fill="#ffdcc0"/><rect x="3" y="3" width="1" height="1" fill="#4a3f55"/><rect x="5" y="3" width="1" height="1" fill="#4a3f55"/><rect x="1" y="4" width="6" height="2" fill="#ffcf5e"/><rect x="1" y="6" width="2" height="1" fill="#5b6b8f"/><rect x="5" y="6" width="2" height="1" fill="#5b6b8f"/>'),
+  penguin: svg('<rect x="2" y="0" width="4" height="1" fill="#4b5a7a"/><rect x="1" y="1" width="6" height="4" fill="#4b5a7a"/><rect x="2" y="2" width="4" height="3" fill="#fffdf7"/><rect x="3" y="2" width="1" height="1" fill="#4a3f55"/><rect x="4" y="2" width="1" height="1" fill="#4a3f55"/><rect x="3" y="3" width="2" height="1" fill="#ff9d4d"/><rect x="1" y="5" width="2" height="1" fill="#ff9d4d"/><rect x="5" y="5" width="2" height="1" fill="#ff9d4d"/>'),
+  slime: svg('<rect x="2" y="2" width="4" height="1" fill="#7fd6a6"/><rect x="1" y="3" width="6" height="4" fill="#7fd6a6"/><rect x="2" y="4" width="1" height="1" fill="#4a3f55"/><rect x="5" y="4" width="1" height="1" fill="#4a3f55"/><rect x="3" y="6" width="2" height="1" fill="#5cbf88"/>'),
+  bat: svg('<rect x="0" y="2" width="2" height="2" fill="#8f7fbe"/><rect x="6" y="2" width="2" height="2" fill="#8f7fbe"/><rect x="2" y="1" width="4" height="5" fill="#a08fd0"/><rect x="3" y="2" width="1" height="1" fill="#fff"/><rect x="4" y="2" width="1" height="1" fill="#fff"/><rect x="3" y="4" width="2" height="1" fill="#5c4f80"/>'),
+  crab: svg('<rect x="1" y="2" width="6" height="4" fill="#ff9b8a"/><rect x="0" y="1" width="2" height="2" fill="#ffb3a6"/><rect x="6" y="1" width="2" height="2" fill="#ffb3a6"/><rect x="2" y="3" width="1" height="1" fill="#4a3f55"/><rect x="5" y="3" width="1" height="1" fill="#4a3f55"/><rect x="2" y="6" width="4" height="1" fill="#ffb3a6"/>'),
+  ghost: svg('<rect x="2" y="1" width="4" height="2" fill="#cfe6f5"/><rect x="1" y="2" width="6" height="4" fill="#cfe6f5"/><rect x="1" y="6" width="1" height="1" fill="#cfe6f5"/><rect x="3" y="6" width="1" height="1" fill="#cfe6f5"/><rect x="6" y="6" width="2" height="1" fill="#cfe6f5"/><rect x="2" y="3" width="1" height="1" fill="#6f8fa8"/><rect x="5" y="3" width="1" height="1" fill="#6f8fa8"/>'),
+  boss: svg('<rect x="1" y="0" width="6" height="1" fill="#8a6fb8"/><rect x="0" y="1" width="2" height="2" fill="#8a6fb8"/><rect x="6" y="1" width="2" height="2" fill="#8a6fb8"/><rect x="2" y="1" width="4" height="5" fill="#b79ae0"/><rect x="2" y="2" width="1" height="1" fill="#fff"/><rect x="5" y="2" width="1" height="1" fill="#fff"/><rect x="3" y="4" width="2" height="1" fill="#5c4f80"/><rect x="1" y="6" width="6" height="1" fill="#8a6fb8"/>'),
+  tree: svg('<rect x="3" y="0" width="2" height="1" fill="#7fbf67"/><rect x="2" y="1" width="4" height="2" fill="#7fbf67"/><rect x="3" y="3" width="2" height="3" fill="#c79a6b"/>'),
+  flower: svg('<rect x="3" y="2" width="2" height="1" fill="#ffc0d4"/><rect x="2" y="3" width="4" height="1" fill="#ffe0ec"/><rect x="3" y="4" width="2" height="3" fill="#8fd06a"/>'),
+  star: svg('<rect x="3" y="0" width="2" height="2" fill="#ffd75e"/><rect x="1" y="2" width="6" height="2" fill="#ffd75e"/><rect x="0" y="4" width="8" height="1" fill="#ffc23f"/><rect x="1" y="5" width="2" height="1" fill="#ffc23f"/><rect x="5" y="5" width="2" height="1" fill="#ffc23f"/><rect x="2" y="3" width="1" height="1" fill="#fff6cf"/><rect x="4" y="2" width="1" height="1" fill="#fff6cf"/>'),
+  portal: svg('<rect x="2" y="0" width="4" height="1" fill="#b79ae0"/><rect x="1" y="1" width="1" height="4" fill="#b79ae0"/><rect x="6" y="1" width="1" height="4" fill="#b79ae0"/><rect x="2" y="5" width="4" height="2" fill="#d9c8f2"/><rect x="3" y="2" width="2" height="3" fill="#eae0ff"/>')
+};
+var MONSTERS = ['slime','bat','crab','ghost','slime','bat','crab','ghost','slime','bat','crab','ghost','slime','bat','crab','ghost','slime','bat','crab','boss'];
+var THEMES = [
+  {ground:'#a8de7d'},{ground:'#9fd8e6'},{ground:'#f6d6a8'},
+  {ground:'#c7d9f7'},{ground:'#e8c7e8'},{ground:'#b8e3c8'}
+];
+
+/* =========================================================
+   2. 关卡内容
+   ========================================================= */
+var LV = [];
+function lv(scene, story, goal, hint, item, starter, check){
+  LV.push({scene:scene, story:story, goal:goal, hint:hint, item:item,
+    starter:starter, check:check});
+}
+
+lv('校门口',
+  '开学第一天，小布在校门口的地上捡到一张会发光的纸条。',
+  '让程序打印出「你好，翔安」',
+  'print() 括号里的文字要用英文引号包起来，中文引号不行。',
+  '薄荷糖',
+  '# 让小布大声说出第一句话\nprint("在这里写点什么")',
+  'assert "你好，翔安" in _out, "输出里还没有「你好，翔安」，把括号里的内容换成它吧（记得用英文引号）"');
+
+lv('大草坪',
+  '草丛里钻出一只语法小怪，它只认写在变量里的名字。',
+  '把 name 改成「小布」、age 改成 18，并把两个变量都打印出来',
+  '文字要加引号，数字不用；print(name) 一次打印一个变量。',
+  '像素鱼干',
+  'name = "???"\nage = 0\n\nprint(name)\nprint(age)',
+  'assert _g.get("name") == "小布", "name 变量还不等于「小布」"\nassert _g.get("age") == 18, "age 变量还不等于数字 18（数字不要加引号）"\nassert "小布" in _out, "还没有把 name 打印出来"\nassert "18" in _out, "还没有把 age 打印出来"');
+
+lv('一期食堂',
+  '食堂阿姨把三张价签贴在了窗口上，可总价还算不出来。',
+  '把三个价格加起来存进 total，并打印出来',
+  '加法用 +，结果要赋值给 total，最后 print(total)。',
+  '咖啡糖',
+  'rice = 12\nsoup = 8\ndish = 15\n\n# 把三个价格加起来，存进 total\ntotal = 0\n\nprint(total)',
+  'assert _g.get("total") == 35, "total 应该是 12 + 8 + 15 的结果"\nassert "35" in _out, "total 算对了，但还没有把 total 打印出来"');
+
+lv('宿舍楼',
+  '室友问你叫什么、几岁了，小布想一次把话说完。',
+  '用 f-string 打印：我是小布，今年18岁',
+  'f"文字{变量}" 可以把变量直接放进句子里，注意 f 和引号。',
+  '樱花书签',
+  'name = "小布"\nage = 18\n\n# 用 f"..." 把 name 和 age 拼进一句话\nprint("")',
+  'assert "我是小布，今年18岁" in _out, "整句话要是：我是小布，今年18岁（可以用 f-string 拼）"');
+
+lv('德旺图书馆',
+  '借书机只认数字，可你手里的借书码是字符串。',
+  '用 int() 把 s 转成整数存进 n，并让 30 出现在输出里',
+  '字符串 "25" 加上数字会出错，先 int(s) 变成整数。',
+  '蓝图碎片',
+  's = "25"\n\n# 用 int() 把字符串变成整数\nn = 0\n\nprint(n + 5)',
+  'assert _g.get("n") == 25, "n 应该是整数 25，可以用 int(s)"\nassert "30" in _out, "n + 5 的结果还没有出现在输出里"');
+
+lv('风雨操场',
+  '操场边的告示牌写着：体力 50 以上才能继续跑圈。',
+  '如果 hp 大于等于 50 打印「还能跑」，否则打印「先休息」',
+  'if 后面的条件要写 hp >= 50，冒号别忘了，下一行要缩进。',
+  '小星星',
+  'hp = 60\n\n# 如果 hp 大于等于 50，打印 还能跑；否则打印 先休息\n',
+  'assert "还能跑" in _out, "hp 是 60，大于等于 50，应该输出「还能跑」"\nassert "先休息" not in _out, "这一次不用走 else 分支哦"');
+
+lv('篮球场',
+  '裁判举着记分牌，分数决定你能拿到什么评价。',
+  '90 分以上打印「优秀」，60 分以上打印「及格」，否则打印「补考」',
+  'elif 可以接着 if 往下判断，顺序是从上往下依次匹配。',
+  '橡皮鸭',
+  'score = 78\n\n# 90 分以上打印 优秀，60 分以上打印 及格，否则打印 补考\n',
+  'assert "及格" in _out, "78 分在 60 到 89 之间，应该输出「及格」"\nassert "优秀" not in _out, "78 分还没到 90 分哦"\nassert "补考" not in _out, "78 分已经及格了，不用补考"');
+
+lv('实验楼',
+  '实验室的门有两道锁：年龄够、并且带了门禁卡。',
+  '两个条件都满足时打印「可以借书」，否则打印「不能借书」',
+  '两个条件同事满足用 and 连接：age >= 18 and has_card。',
+  '铅笔头',
+  'age = 19\nhas_card = True\n\n# 两个条件都满足才打印 可以借书，否则打印 不能借书\n',
+  'assert "可以借书" in _out, "age 和 has_card 都满足，应该输出「可以借书」"\nassert "不能借书" not in _out, "这一次不要走 else 分支哦"');
+
+lv('计算机机房',
+  '机房的老服务器要你算出 1 到 10 的总和才肯开机。',
+  '用 for 循环把 1 到 10 加起来，打印结果 55',
+  'range(1, 11) 会依次给出 1 到 10；循环里每次把 i 加到 total 上。',
+  '像素齿轮',
+  'total = 0\n\n# 用 for 循环把 1 到 10 加起来\nfor i in range(1):\n    total = total + i\n\nprint(total)',
+  'assert _g.get("total") == 55, "total 应该是 1 加到 10 的结果 55"\nassert "55" in _out, "算出来了，但还没有把 total 打印出来"');
+
+lv('湖边小道',
+  '湖边有个倒计时牌，数字要一格一格地变小。',
+  '用 while 打印 3、2、1 各一行，最后打印「出发！」',
+  '每转一圈要让 n 减少 1，否则循环停不下来；最后 print("出发！")。',
+  '小铃铛',
+  'n = 3\n\nwhile n > 0:\n    print(n)\n    n = n - 2\n\nprint("出发！")',
+  '_lines = [x.strip() for x in _out.strip().splitlines() if x.strip()]\nassert _lines == ["3", "2", "1", "出发！"], "输出应该是 3、2、1 各一行，最后一行是 出发！；看看 n 每次该减少多少"');
+
+lv('湖边果园',
+  '果园的牌子写着：摘第一个，再摘最后一个。',
+  '打印列表里的第一个水果和最后一个水果',
+  '下标从 0 开始，最后一个可以用 fruits[2] 或 fruits[-1]。',
+  '玻璃珠',
+  'fruits = ["苹果", "香蕉", "橘子"]\n\nprint(fruits[0])\nprint(fruits[0])   # 这一行要改成打印最后一个',
+  'assert "苹果" in _out, "还没有打印第一个水果"\nassert "橘子" in _out, "还没有打印最后一个水果"\nassert _g.get("fruits") == ["苹果", "香蕉", "橘子"], "不要改动 fruits 列表本身"');
+
+lv('校园超市',
+  '小布推着购物车，要把三样东西依次放进袋子。',
+  '用 append 往 bag 里依次放入牛奶、面包、鸡蛋，然后打印 len(bag)',
+  'bag.append("牛奶") 一次放一样，顺序要对；len() 数字数。',
+  '纸飞机',
+  'bag = []\n\n# 依次放入 牛奶、面包、鸡蛋\nbag.append("牛奶")\n\nprint(len(bag))',
+  'assert _g.get("bag") == ["牛奶", "面包", "鸡蛋"], "bag 里应该有 牛奶、面包、鸡蛋 三样，注意顺序和名字"\nassert "3" in _out, "还没有打印袋子里有几样东西"');
+
+lv('学生宿舍',
+  '宿舍楼下的排行榜（只看本周最高分）被风吹花了，只能自己算。',
+  '用 for 循环找出 scores 里的最大值存进 best，并打印',
+  '先假设第一个分数最大，然后逐个比较，遇到更大的就更新 best。',
+  '四叶草',
+  'scores = [88, 97, 76, 91]\nbest = scores[0]\n\n# 用 for 找出最大的分数\nfor s in scores:\n    pass\n\nprint(best)',
+  'assert _g.get("best") == 97, "最高分是 97，再看看比较的逻辑"\nassert "97" in _out, "已经算出来了，别忘了打印 best"');
+
+lv('二期食堂',
+  '食堂的菜单被雨水打湿，只有字典里还存着价格。',
+  '打印红烧肉的价格，再算出三样菜的总价 total 并打印',
+  '字典用 menu["红烧肉"] 取值，键名和引号都要对。',
+  '奶油泡芙',
+  'menu = {"红烧肉": 15, "青菜": 8, "米饭": 2}\n\n# 打印红烧肉的价格\nprint(menu[""])\n\n# 三样菜的总价\ntotal = 0\nprint(total)',
+  'assert "15" in _out, "还没有打印出红烧肉的价格 15"\nassert _g.get("total") == 25, "total 应该是 15 + 8 + 2 的结果"');
+
+lv('语音教室',
+  '语音室的话筒把一句话录得又带空格、又是大写。',
+  '去掉 s 首尾的空格并转成小写，打印出 hello python',
+  '字符串自带方法：s.strip() 去空格，s.lower() 变小写，可以连起来写。',
+  '晶片',
+  's = "  Hello Python  "\n\n# 去掉首尾空格，再转成小写\nprint(s)',
+  'assert "hello python" in _out, "输出里要出现 hello python（首尾没有空格，全部小写）"');
+
+lv('学院楼天台',
+  '天台的自动答题机只会调用一个叫 add 的函数。',
+  '定义函数 add(a, b)，返回 a + b，并打印 add(3, 5)',
+  'def 定义函数，括号里是参数，return 把结果交回去。',
+  '迷你沙漏',
+  '# 定义函数 add(a, b)，返回 a + b\ndef add(a, b):\n    return 0\n\nprint(add(3, 5))',
+  '_f = _g.get("add")\nassert callable(_f), "还没有定义 add 函数"\nassert _f(1, 2) == 3, "add(1, 2) 应该等于 3"\nassert _f(10, -4) == 6, "add(10, -4) 应该等于 6"\nassert "8" in _out, "别忘记打印 add(3, 5)"');
+
+lv('小礼堂',
+  '礼堂的台阶一共有 n 级，小布想知道走完要迈多少步。',
+  '定义 total_steps(n)，返回 1 加到 n 的和，并打印 total_steps(5)',
+  '在函数里先用 total = 0，再用 for 循环累加，最后 return total。',
+  '彩虹糖',
+  'def total_steps(n):\n    total = 0\n    # 把 1 到 n 加起来\n    return total\n\nprint(total_steps(5))',
+  '_f = _g.get("total_steps")\nassert callable(_f), "还没有定义 total_steps 函数"\nassert _f(5) == 15, "total_steps(5) 应该等于 15"\nassert _f(10) == 55, "total_steps(10) 应该等于 55"\nassert "15" in _out, "别忘记打印 total_steps(5)"');
+
+lv('网络中心',
+  '网络中心里有一只机器宠物，需要你用类把它唤醒。',
+  '完善 Pet 类，让 speak() 返回「小布若 说：咕」，并打印 p.speak()',
+  'self.name 就是这只宠物的名字；方法里用 return 返回字符串。',
+  '旧钥匙',
+  'class Pet:\n    def __init__(self, name):\n        self.name = name\n\n    def speak(self):\n        return ""\n\np = Pet("小布若")\nprint(p.speak())',
+  '_p = _g.get("p")\nassert _p is not None, "还没有创建 p = Pet(\\"小布若\\")"\nassert getattr(_p, "name", None) == "小布若", "p.name 应该是 小布若"\n_s = _p.speak()\nassert isinstance(_s, str) and "小布若" in _s and "咕" in _s, "speak() 要返回 小布若 说：咕"\nassert "小布若" in _out, "还没有把 p.speak() 打印出来"');
+
+lv('学院教学楼',
+  '年级名单传到了你手里，要统计有多少人及格。',
+  '完善 Student.passed()，再统计 students 里及格的人数存进 count，并打印',
+  'passed() 里判断 self.score >= 60；统计时用 for 遍历，满足就 count += 1。',
+  '云朵棉花糖',
+  'class Student:\n    def __init__(self, name, score):\n        self.name = name\n        self.score = score\n\n    def passed(self):\n        return False\n\nstudents = [Student("阿明", 72), Student("小夏", 58),\n            Student("雷雷", 90), Student("阿布", 61)]\n\ncount = 0\n# 统计及格人数\n\nprint(count)',
+  '_C = _g.get("Student")\nassert callable(_C), "Student 类不见了，先别删掉它"\nassert _C("测试", 60).passed() is True, "60 分应该算及格"\nassert _C("测试", 59).passed() is False, "59 分应该算不及格"\nassert _g.get("count") == 3, "及格的人有 3 个，再检查一下统计逻辑"\nassert "3" in _out, "别忘了打印 count"');
+
+lv('东门',
+  '东门外的最终 Boss 挡住了回宿舍的路，它只接受一份完整的小程序。',
+  '统计列表里有几条「鱼干」，存进 count，并打印：小布若收集到 3 条鱼干',
+  '遍历 drops，用 if 判断是不是「鱼干」，是就 count += 1；最后用 f-string 输出。',
+  '金鱼干',
+  'drops = ["鱼干", "宝石", "鱼干", "鱼干", "贝壳"]\ncount = 0\n\n# 数一数有几条鱼干\n\nprint(count)\n# 再打印：小布若收集到 3 条鱼干',
+  'assert _g.get("count") == 3, "鱼干一共有 3 条，再检查一下计数"\nassert "小布若收集到 3 条鱼干" in _out, "最后还要打印一句：小布若收集到 3 条鱼干"');
+
+var BUILTIN_PACK = {
+  id:'builtin',
+  name:'大一 Python · 全阶段',
+  desc:'从 print 到类与对象，20 个小场景',
+  levels: LV
+};
+var WARM_PACK = {
+  id:'warmup',
+  name:'考前 6 题冲刺',
+  desc:'条件、循环、列表、字典、函数、类',
+  levels: [LV[5], LV[6], LV[8], LV[10], LV[13], LV[15]]
+};
+var BUILTIN_PACKS = [BUILTIN_PACK, WARM_PACK];
+
+/* =========================================================
+   3. 本地存档
+   ========================================================= */
+var LS_STATE = 'pyquest_state_v1';
+var LS_PACKS = 'pyquest_packs_v1';
+var store = {packId:'builtin', packs:{}};
+try {
+  var raw = localStorage.getItem(LS_STATE);
+  if (raw) store = JSON.parse(raw);
+} catch(e){}
+if (!store || !store.packs) store = {packId:'builtin', packs:{}};
+
+function save(){
+  try { localStorage.setItem(LS_STATE, JSON.stringify(store)); } catch(e){}
+}
+function ps(){
+  if (!store.packs[store.packId]) {
+    store.packs[store.packId] = {cleared:[], drafts:{}, items:[], cur:0, pet:false};
+  }
+  var p = store.packs[store.packId];
+  p.cleared = p.cleared || [];
+  p.drafts = p.drafts || {};
+  p.items = p.items || [];
+  p.cur = p.cur || 0;
+  return p;
+}
+function customPacks(){
+  try { return JSON.parse(localStorage.getItem(LS_PACKS) || '[]'); } catch(e){ return []; }
+}
+function saveCustomPacks(list){
+  try { localStorage.setItem(LS_PACKS, JSON.stringify(list)); } catch(e){}
+}
+function allPacks(){ return BUILTIN_PACKS.concat(customPacks()); }
+function getPack(id){
+  var list = allPacks();
+  for (var i=0;i<list.length;i++) if (list[i].id === id) return list[i];
+  return BUILTIN_PACK;
+}
+
+/* =========================================================
+   4. DOM
+   ========================================================= */
+var mapEl = document.getElementById('map');
+var codeEl = document.getElementById('code');
+var storyEl = document.getElementById('story');
+var goalEl = document.getElementById('goal');
+var hintEl = document.getElementById('hint');
+var lvNameEl = document.getElementById('lvName');
+var lvSceneEl = document.getElementById('lvScene');
+var lvCntEl = document.getElementById('lvCnt');
+var runBtn = document.getElementById('btnRun');
+var resultEl = document.getElementById('result');
+var rTitle = document.getElementById('rTitle');
+var rTip = document.getElementById('rTip');
+var rLine = document.getElementById('rLine');
+var rRaw = document.getElementById('rRaw');
+var rRawWrap = document.getElementById('rRawWrap');
+var toastEl = document.getElementById('toast');
+var bootEl = document.getElementById('boot');
+var bootTitle = document.getElementById('bootTitle');
+var bootMsg = document.getElementById('bootMsg');
+
+document.getElementById('brandLogo').innerHTML = SPR.hero;
+document.getElementById('bootHero').innerHTML = SPR.hero;
+document.getElementById('clearStar').innerHTML = SPR.star;
+document.getElementById('petSprite').innerHTML = SPR.penguin;
+
+var levels = BUILTIN_PACK.levels;
+var curIdx = 0;
+var tiles = [];
+var heroWrap = null;
+var monsterEl = null;
+var animating = false;
+var busy = false;
+
+/* =========================================================
+   5. Python 引擎（Web Worker）
+   ========================================================= */
+var PY_HELPER = [
+'import sys, io, json, traceback, builtins',
+'',
+'def _no_input(*args, **kwargs):',
+'    raise RuntimeError("这个编辑器里没有键盘输入，直接用题目里已经给好的变量就好～")',
+'',
+'def _friend_exec(user_code, check_code):',
+'    g = {"__name__": "__main__", "__builtins__": builtins}',
+'    g["input"] = _no_input',
+'    buf = io.StringIO()',
+'    old = sys.stdout',
+'    sys.stdout = buf',
+'    err_name = ""',
+'    err_msg = ""',
+'    line = 0',
+'    try:',
+'        exec(compile(user_code, "<你的代码>", "exec"), g)',
+'    except Exception as e:',
+'        err_name = type(e).__name__',
+'        err_msg = str(e)',
+'        if isinstance(e, SyntaxError):',
+'            line = e.lineno or 0',
+'        else:',
+'            try:',
+'                for fr in traceback.extract_tb(sys.exc_info()[2]):',
+'                    if fr.filename == "<你的代码>":',
+'                        line = fr.lineno',
+'            except Exception:',
+'                line = 0',
+'    finally:',
+'        sys.stdout = old',
+'    out = buf.getvalue()',
+'    if err_name:',
+'        return json.dumps({"ok": False, "out": out, "err": err_name, "msg": err_msg, "line": line})',
+'    cg = dict(g)',
+'    cg["_out"] = out',
+'    cg["_g"] = g',
+'    cbuf = io.StringIO()',
+'    sys.stdout = cbuf',
+'    msg = ""',
+'    try:',
+'        exec(compile(check_code, "<检查>", "exec"), cg)',
+'    except AssertionError as e:',
+'        msg = str(e) or "再加一点点就对了～"',
+'    except Exception as e:',
+'        msg = "检查结果的时候出了点小状况：" + str(e)',
+'    finally:',
+'        sys.stdout = old',
+'    extra = cbuf.getvalue()',
+'    return json.dumps({"ok": msg == "", "out": out, "err": "", "msg": msg, "line": 0, "extra": extra})'
+].join('\n');
+
+var CDNS = [
+  'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/',
+  'https://cdn.npmmirror.com/packages/pyodide/0.26.4/files/',
+  'https://unpkg.com/pyodide@0.26.4/'
+];
+
+var WORKER_SRC = [
+  'var CDNS = ' + JSON.stringify(CDNS) + ';',
+  'var HELPER = ' + JSON.stringify(PY_HELPER) + ';',
+  'var py = null;',
+  'async function boot(){',
+  '  var last = "";',
+  '  for (var i=0;i<CDNS.length;i++){',
+  '    var base = CDNS[i];',
+  '    try {',
+  '      importScripts(base + "pyodide.js");',
+  '      py = await loadPyodide({ indexURL: base });',
+  '      py.runPython(HELPER);',
+  '      postMessage({type:"ready"});',
+  '      return;',
+  '    } catch(e){ last = String((e && e.message) || e); }',
+  '  }',
+  '  postMessage({type:"fatal", message:last});',
+  '}',
+  'self.onmessage = function(ev){',
+  '  var d = ev.data;',
+  '  if (d.type === "run"){',
+  '    try {',
+  '      var fn = py.globals.get("_friend_exec");',
+  '      var res = fn(d.code, d.check);',
+  '      postMessage({type:"result", id:d.id, data: JSON.parse(res)});',
+  '    } catch(e){',
+  '      postMessage({type:"result", id:d.id, data:{ok:false, err:"RuntimeError", msg:String((e && e.message) || e), line:0, out:""}});',
+  '    }',
+  '  }',
+  '};',
+  'boot();'
+].join('\n');
+
+var worker = null;
+var engineReady = false;
+var runTimer = null;
+var runSeq = 0;
+
+function bootWorker(){
+  engineReady = false;
+  if (worker) { try { worker.terminate(); } catch(e){} }
+  try {
+    var blob = new Blob([WORKER_SRC], {type:'text/javascript'});
+    worker = new Worker(URL.createObjectURL(blob));
+  } catch(e){
+    engineFatal('浏览器不支持后台运行引擎');
+    return;
+  }
+  worker.onmessage = onWorkerMsg;
+  worker.onerror = function(e){
+    engineFatal((e && e.message) || '引擎加载出错');
+  };
+}
+
+function showBoot(msg){
+  bootTitle.textContent = '正在唤醒 Python 引擎';
+  bootMsg.innerHTML = msg || '第一次进入需要下载约 10MB 的引擎，之后会快很多。<br>不需要注册，也不会向任何地方上传数据。';
+  bootEl.classList.remove('error');
+  bootEl.classList.remove('hide');
+}
+function hideBoot(){ bootEl.classList.add('hide'); }
+function engineFatal(msg){
+  try { if (worker) worker.terminate(); } catch(e){}
+  worker = null;
+  engineReady = false;
+  bootTitle.textContent = '引擎还没准备好';
+  bootMsg.innerHTML = '没能把 Python 引擎下载下来（大约 10MB）。<br>连上网络后点重试就可以；也可以先看看关卡内容。<br><span style="font-size:10.5px;opacity:.7">' + (msg || '') + '</span>';
+  bootEl.classList.add('error');
+  bootEl.classList.remove('hide');
+}
+
+function onWorkerMsg(ev){
+  var d = ev.data;
+  if (d.type === 'ready'){
+    engineReady = true;
+    hideBoot();
+    setRunIdle();
+  } else if (d.type === 'fatal'){
+    engineFatal(d.message);
+  } else if (d.type === 'result'){
+    if (d.id !== runSeq) return;
+    if (runTimer) { clearTimeout(runTimer); runTimer = null; }
+    busy = false;
+    setRunIdle();
+    var r = d.data;
+    if (r.ok) onPassed();
+    else onFailed(r);
+  }
+}
+
+function setRunIdle(){
+  runBtn.disabled = busy || !engineReady;
+  runBtn.textContent = engineReady ? '运 行' : '准备中';
+}
+function setRunBusy(){
+  runBtn.disabled = true;
+  runBtn.textContent = '运行中';
+}
+
+function onTimeout(){
+  if (runTimer) { clearTimeout(runTimer); runTimer = null; }
+  busy = false;
+  engineReady = false;
+  try { if (worker) worker.terminate(); } catch(e){}
+  worker = null;
+  setRunIdle();
+  showResult({
+    title:'代码停不下来了',
+    tip:'循环好像没有出口。检查一下 while 的条件是不是永远成立，循环里有没有让变量变化，或者 for 的 range 是不是特别大。引擎马上重新准备。',
+    raw:'运行超过 6 秒，已自动停止'
+  });
+  showBoot('正在重新唤醒 Python 引擎，稍等一下…');
+  setTimeout(bootWorker, 300);
+}
+
+/* =========================================================
+   6. 友好提示
+   ========================================================= */
+function friendly(r){
+  var t = r.err || '';
+  var m = r.msg || '';
+  if (t === 'SyntaxError' || t === 'IndentationError' || t === 'TabError'){
+    if (/expected ':'/.test(m)) return {title:'少了一个冒号', tip:'这一行结尾少了一个冒号「:」。if、elif、else、for、while、def 后面都要加冒号。'};
+    if (/expected an indented block/.test(m)) return {title:'这里需要缩进', tip:'冒号后面要换行，并且缩进 4 个空格，缩进的那几行才属于这个条件或循环。'};
+    if (/unexpected indent/.test(m)) return {title:'缩进多了一点', tip:'这一行开头多了空格，它不属于上面任何一个循环或条件，把它顶格写试试。'};
+    if (/unexpected EOF|was never closed|closing parenthesis/.test(m)) return {title:'括号没配对', tip:'括号或引号只写了一半。数一数这一行的左括号和右括号、左引号和右引号是不是成对。'};
+    if (/unterminated string|EOL while scanning/.test(m)) return {title:'引号没配对', tip:'字符串的引号要成对出现，检查这一行是不是只写了一个引号。'};
+    if (/invalid character|invalid non-printable/.test(m)) return {title:'混进了中文符号', tip:'代码里好像混进了中文标点（：，（）「」）。切到英文输入法，把符号重新敲一遍。'};
+    if (/invalid syntax/.test(m)) return {title:'语法上还差一点', tip:'常见原因是少冒号、少括号、少引号，或者该缩进的地方没有缩进。对照题目里的示例看看。'};
+    return {title:'语法上还差一点', tip:'再检查一下这一行：冒号、括号、引号有没有写全。'};
+  }
+  if (t === 'NameError'){
+    var mm = m.match(/name '([^']+)' is not defined/);
+    var nm = mm ? mm[1] : '这个名字';
+    return {title:'有个名字还不认识', tip:'「' + nm + '」还没有定义。检查一下拼写，或者先用 = 给它赋个值，再使用它。'};
+  }
+  if (t === 'TypeError'){
+    if (/can only concatenate str|unsupported operand type/.test(m)) return {title:'类型对不上', tip:'文字和数字不能直接相加。先用 int() 把文字变成数字，或者用 str() 把数字变成文字。'};
+    if (/not callable/.test(m)) return {title:'这个不能直接调用', tip:'检查是不是把变量当成了函数；调用函数要写 name()，括号别丢。'};
+    if (/missing .*required positional argument/.test(m)) return {title:'参数少给了', tip:'调用函数时括号里的参数个数要和定义时对得上。'};
+    if (/takes .* positional arguments/.test(m)) return {title:'参数多了', tip:'这个函数不需要这么多参数，看看定义里要几个。'};
+    return {title:'类型不太对', tip:'参与运算的数据类型可能不匹配，检查一下是文字还是数字。'};
+  }
+  if (t === 'IndexError'){
+    return {title:'下标超出范围', tip:'列表没有这么长的位置。下标从 0 开始，最后一个元素可以用 [-1]。'};
+  }
+  if (t === 'KeyError'){
+    var km = m.match(/'([^']+)'|"([^"]+)"/);
+    var key = km ? (km[1] || km[2]) : '';
+    return {title:'字典里没有这个键', tip:'字典里找不到「' + key + '」。检查键名有没有写错，键名要和字典里的一字不差。'};
+  }
+  if (t === 'ValueError'){
+    return {title:'这个值转不了', tip:'比如 int("abc") 是没法转换的，确认引号里放的是数字。'};
+  }
+  if (t === 'ZeroDivisionError'){
+    return {title:'不能除以 0', tip:'除号后面的值不能是 0，检查一下参与除法的变量。'};
+  }
+  if (t === 'AttributeError'){
+    return {title:'没有这个属性或方法', tip:'检查拼写；列表加元素用 .append()，字典取值用 []，字符串方法要加括号。'};
+  }
+  if (t === 'RuntimeError' && /键盘输入/.test(m)){
+    return {title:'这里不需要输入', tip:m};
+  }
+  return {title:'运行到一半停住了', tip:'代码遇到了一点问题：' + (m || '暂时看不出原因') + '。先看看是不是变量还没赋值。'};
+}
+
+function showResult(o){
+  rTitle.textContent = o.title || '再试一次';
+  rTip.textContent = o.tip || '';
+  if (o.lineText){
+    rLine.hidden = false;
+    rLine.innerHTML = '第 ' + o.line + ' 行  <b>' + escapeHtml(o.lineText) + '</b>';
+  } else {
+    rLine.hidden = true;
+    rLine.textContent = '';
+  }
+  if (o.out){
+    rRawWrap.hidden = false;
+    rRaw.textContent = o.out.length > 1200 ? o.out.slice(0,1200) + '\n…' : o.out;
+  } else if (o.raw){
+    rRawWrap.hidden = false;
+    rRaw.textContent = o.raw;
+  } else {
+    rRawWrap.hidden = true;
+    rRaw.textContent = '';
+  }
+  resultEl.classList.add('show');
+}
+function hideResult(){ resultEl.classList.remove('show'); }
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+var toastTimer = null;
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 1800);
+}
+
+/* =========================================================
+   7. 地图
+   ========================================================= */
+var COLS = 5, ROWS = 3, TOTAL = COLS * ROWS;
+
+function renderMap(idx){
+  var L = levels[idx];
+  mapEl.innerHTML = '';
+  mapEl.style.setProperty('--ground', THEMES[idx % THEMES.length].ground);
+  tiles = [];
+  var i;
+  for (i=0;i<TOTAL;i++){
+    var row = Math.floor(i / COLS);
+    var col = (row % 2 === 0) ? (i % COLS) : (COLS - 1 - (i % COLS));
+    var cell = document.createElement('div');
+    cell.className = 'tile';
+    cell.style.gridRow = String(row + 1);
+    cell.style.gridColumn = String(col + 1);
+    if (i === 0) cell.classList.add('explored');
+    var seed = ((idx + 1) * 31 + i * 17) % 11;
+    if (i !== 0 && i !== TOTAL - 1 && (seed === 0 || seed === 5)){
+      var d = document.createElement('div');
+      d.className = 'deco';
+      d.innerHTML = (seed === 0) ? SPR.tree : SPR.flower;
+      cell.appendChild(d);
+    }
+    if (i === TOTAL - 1) cell.style.boxShadow = 'inset 0 0 0 2px #ffe6ee';
+    mapEl.appendChild(cell);
+    tiles.push(cell);
+  }
+
+  heroWrap = document.createElement('div');
+  heroWrap.className = 'pl bob';
+  heroWrap.innerHTML = SPR.hero;
+  tiles[0].appendChild(heroWrap);
+
+  var p = ps();
+  if (p.pet){
+    var pet = document.createElement('div');
+    pet.className = 'pet bob';
+    pet.innerHTML = SPR.penguin;
+    tiles[0].appendChild(pet);
+  }
+
+  monsterEl = document.createElement('div');
+  monsterEl.className = 'mon';
+  var hp = document.createElement('div');
+  hp.className = 'mhp';
+  hp.innerHTML = '<i></i><i></i><i></i>';
+  monsterEl.appendChild(hp);
+  monsterEl.insertAdjacentHTML('beforeend', SPR[MONSTERS[idx % MONSTERS.length]]);
+  tiles[TOTAL - 1].appendChild(monsterEl);
+}
+
+function delay(ms){ return new Promise(function(res){ setTimeout(res, ms); }); }
+
+function setHearts(n){
+  if (!monsterEl) return;
+  var hs = monsterEl.querySelectorAll('.mhp i');
+  for (var i=0;i<hs.length;i++) hs[i].className = (i < n) ? '' : 'off';
+}
+
+async function playClear(){
+  animating = true;
+  if (monsterEl){
+    monsterEl.classList.add('hit');
+    await delay(320);
+    for (var h=2; h>=0; h--){
+      setHearts(h);
+      await delay(140);
+    }
+    monsterEl.classList.add('poof');
+    var last = tiles[TOTAL - 1];
+    for (var s=0; s<7; s++){
+      var sp = document.createElement('span');
+      sp.className = 'spark';
+      sp.style.left = (25 + Math.random() * 50) + '%';
+      sp.style.top = (25 + Math.random() * 45) + '%';
+      sp.style.setProperty('--dx', (Math.random() * 44 - 22) + 'px');
+      sp.style.setProperty('--dy', (-18 - Math.random() * 22) + 'px');
+      last.appendChild(sp);
+      setTimeout(function(el){ return function(){ if (el.parentNode) el.parentNode.removeChild(el); }; }(sp), 800);
+    }
+    await delay(420);
+  }
+  for (var k=1;k<tiles.length;k++){
+    tiles[k].classList.add('explored');
+    if (heroWrap) tiles[k].appendChild(heroWrap);
+    await delay(90);
+  }
+  await delay(160);
+  animating = false;
+  openClear();
+}
+
+/* =========================================================
+   8. 关卡加载
+   ========================================================= */
+function loadLevel(idx){
+  if (idx < 0) idx = 0;
+  if (idx > levels.length - 1) idx = levels.length - 1;
+  curIdx = idx;
+  var L = levels[idx];
+  var p = ps();
+  p.cur = idx;
+  save();
+
+  lvNameEl.textContent = '第 ' + (idx + 1) + ' 关';
+  lvSceneEl.textContent = L.scene;
+  var cnt = p.cleared.length;
+  lvCntEl.textContent = '已通关 ' + cnt + ' / ' + levels.length;
+
+  storyEl.textContent = L.story;
+  goalEl.textContent = L.goal;
+  hintEl.textContent = L.hint || '';
+  hintEl.hidden = true;
+  document.getElementById('btnHint').textContent = '看提示';
+
+  renderMap(idx);
+
+  var key = 'i' + idx;
+  codeEl.value = (p.drafts[key] != null) ? p.drafts[key] : L.starter;
+  hideResult();
+  setRunIdle();
+}
+
+function saveDraft(){
+  var p = ps();
+  p.drafts['i' + curIdx] = codeEl.value;
+  save();
+}
+var draftTimer = null;
+codeEl.addEventListener('input', function(){
+  if (draftTimer) clearTimeout(draftTimer);
+  draftTimer = setTimeout(saveDraft, 400);
+});
+
+/* =========================================================
+   9. 运行
+   ========================================================= */
+function run(){
+  if (busy || animating) return;
+  if (!engineReady){
+    toast('Python 引擎还在准备，稍等一下');
+    if (!worker){
+      showBoot();
+      bootWorker();
+    } else {
+      showBoot();
+    }
+    return;
+  }
+  saveDraft();
+  hideResult();
+  busy = true;
+  setRunBusy();
+  var L = levels[curIdx];
+  var id = ++runSeq;
+  runTimer = setTimeout(onTimeout, 6000);
+  worker.postMessage({type:'run', id:id, code:codeEl.value, check:L.check});
+}
+
+function onFailed(r){
+  var f = (!r.err && r.msg)
+    ? {title:'就差一点点', tip:r.msg}
+    : friendly(r);
+  var lineText = '';
+  if (r.line > 0){
+    var arr = codeEl.value.split('\n');
+    lineText = arr[r.line - 1] || '';
+  }
+  showResult({
+    title: f.title,
+    tip: f.tip,
+    line: r.line,
+    lineText: lineText,
+    out: r.out,
+    raw: r.err ? r.msg : ''
+  });
+}
+
+function onPassed(){
+  var p = ps();
+  var first = p.cleared.indexOf(curIdx) === -1;
+  if (first){
+    p.cleared.push(curIdx);
+    var item = levels[curIdx].item;
+    if (p.items.indexOf(item) === -1) p.items.push(item);
+  }
+  var petNew = false;
+  if (!p.pet && p.cleared.length >= 5){
+    p.pet = true;
+    petNew = true;
+  }
+  save();
+  lvCntEl.textContent = '已通关 ' + p.cleared.length + ' / ' + levels.length;
+  playClear().then(function(){ openClear(petNew, first); });
+}
+
+/* =========================================================
+   10. 通关面板
+   ========================================================= */
+function openClear(petNew, first){
+  var L = levels[curIdx];
+  var p = ps();
+  document.getElementById('clearH').textContent = '通关！';
+  document.getElementById('clearTxt').innerHTML =
+    '第 ' + (curIdx + 1) + ' 关 · ' + L.scene + ' 的怪物化成了一小片像素云。<br>' +
+    '前面浮现出一条新的小路。';
+  document.getElementById('clearItem').textContent = first
+    ? '获得道具 · ' + L.item
+    : '道具已经收集过啦 · ' + L.item;
+  document.getElementById('clearPet').hidden = !petNew;
+
+  var isLast = curIdx >= levels.length - 1;
+  var nextBtn = document.getElementById('btnNext');
+  if (isLast){
+    nextBtn.textContent = '全部通关';
+    nextBtn.disabled = false;
+  } else {
+    nextBtn.textContent = '下一关';
+    nextBtn.disabled = false;
+  }
+  document.getElementById('clearSheet').classList.add('show');
+}
+
+/* =========================================================
+   11. 关卡包 / 关卡选择
+   ========================================================= */
+function renderPacks(){
+  var wrap = document.getElementById('packList');
+  wrap.innerHTML = '';
+  var list = allPacks();
+  list.forEach(function(pk){
+    var st = store.packs[pk.id] || {cleared:[]};
+    var cleared = (st.cleared || []).length;
+    var el = document.createElement('div');
+    el.className = 'pk' + (store.packId === pk.id ? ' on' : '');
+    el.innerHTML = '<div class="pn"><b>' + escapeHtml(pk.name) + '</b>' +
+      '<span>' + escapeHtml(pk.desc || (pk.levels.length + ' 关')) + '</span></div>' +
+      '<div class="pg">' + cleared + '/' + pk.levels.length + '</div>';
+    el.addEventListener('click', function(){
+      if (store.packId === pk.id){
+        document.getElementById('packSheet').classList.remove('show');
+        return;
+      }
+      switchPack(pk.id);
+      document.getElementById('packSheet').classList.remove('show');
+      toast('已切换到「' + pk.name + '」');
+    });
+    wrap.appendChild(el);
+  });
+
+  var chips = document.getElementById('itemChips');
+  chips.innerHTML = '';
+  var p = ps();
+  if (p.pet){
+    var pe = document.createElement('span');
+    pe.className = 'chip pet';
+    pe.textContent = '小布若（跟随中）';
+    chips.appendChild(pe);
+  }
+  p.items.forEach(function(it){
+    var c = document.createElement('span');
+    c.className = 'chip';
+    c.textContent = it;
+    chips.appendChild(c);
+  });
+  if (!p.items.length && !p.pet){
+    var em = document.createElement('span');
+    em.className = 'chip';
+    em.textContent = '还没有收集到道具';
+    chips.appendChild(em);
+  }
+
+  var note = document.getElementById('packNote');
+  note.innerHTML = '进度和道具只存在这台设备的浏览器里，换设备不会同步，也不会和别人比较。<br>' +
+    '自定义关卡包同样保存在本地，刷新页面也还在。';
+}
+
+function switchPack(id){
+  store.packId = id;
+  save();
+  var pk = getPack(id);
+  levels = pk.levels;
+  curIdx = 0;
+  loadLevel(0);
+}
+
+function openPackSheet(){
+  renderPacks();
+  document.getElementById('packSheet').classList.add('show');
+}
+
+function renderLevelGrid(){
+  var g = document.getElementById('lvGrid');
+  g.innerHTML = '';
+  var p = ps();
+  var maxOpen = 0;
+  while (maxOpen < levels.length && p.cleared.indexOf(maxOpen) !== -1) maxOpen++;
+  for (var i=0;i<levels.length;i++){
+    (function(i){
+      var el = document.createElement('div');
+      var cleared = p.cleared.indexOf(i) !== -1;
+      var open = i <= maxOpen;
+      el.className = 'lv' + (cleared ? ' done' : '') + (i === curIdx ? ' cur' : '') + (open ? '' : ' lock');
+      el.innerHTML = '<b>' + (i + 1) + '</b><small>' + escapeHtml(levels[i].scene) + '</small>';
+      if (open){
+        el.addEventListener('click', function(){
+          document.getElementById('lvSheet').classList.remove('show');
+          loadLevel(i);
+        });
+      }
+      g.appendChild(el);
+    })(i);
+  }
+}
+
+/* =========================================================
+   12. 自定义关卡包
+   ========================================================= */
+function importPack(text){
+  var data;
+  try { data = JSON.parse(text); } catch(e){ toast('文件不是有效的 JSON'); return; }
+  if (!data || !Array.isArray(data.levels) || !data.levels.length){
+    toast('关卡包里没有 levels 列表'); return;
+  }
+  var out = [];
+  for (var i=0;i<data.levels.length;i++){
+    var s = data.levels[i] || {};
+    if (typeof s.starter !== 'string' || typeof s.check !== 'string'){
+      toast('第 ' + (i + 1) + ' 关缺少 starter 或 check'); return;
+    }
+    out.push({
+      scene: s.scene || ('自定义 ' + (i + 1)),
+      story: s.story || '',
+      goal: s.goal || '完成这一关的代码',
+      hint: s.hint || '',
+      item: s.item || '神秘小物',
+      starter: s.starter,
+      check: s.check
+    });
+  }
+  var pk = {
+    id: 'u' + Date.now().toString(36),
+    name: data.title || '我的关卡包',
+    desc: (data.desc || '自定义关卡') + ' · ' + out.length + ' 关',
+    levels: out
+  };
+  var list = customPacks();
+  list.push(pk);
+  saveCustomPacks(list);
+  store.packId = pk.id;
+  save();
+  levels = pk.levels;
+  curIdx = 0;
+  loadLevel(0);
+  document.getElementById('packSheet').classList.remove('show');
+  toast('已导入「' + pk.name + '」');
+}
+
+function downloadTemplate(){
+  var tpl = {
+    title: '我的练习包',
+    desc: '自制的 Python 小关卡',
+    levels: [
+      {
+        scene: '自定义场景',
+        story: '这里写剧情。',
+        goal: '打印出 hello',
+        hint: 'print() 括号里放文字。',
+        item: '小道具',
+        starter: 'print("")',
+        check: 'assert "hello" in _out, "要打印 hello 哦"'
+      }
+    ]
+  };
+  var blob = new Blob([JSON.stringify(tpl, null, 2)], {type:'application/json'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '关卡模板.json';
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1500);
+}
+
+/* =========================================================
+   13. 编辑器工具
+   ========================================================= */
+var SNIPS = [
+  {t:'print()', i:'print()', b:1, hl:true},
+  {t:'if', i:'if :', b:1},
+  {t:'else', i:'else:', b:0},
+  {t:'for', i:'for i in range():', b:2},
+  {t:'while', i:'while :', b:1},
+  {t:'def', i:'def ():', b:3},
+  {t:'return', i:'return ', b:0},
+  {t:'int()', i:'int()', b:1},
+  {t:'str()', i:'str()', b:1},
+  {t:'len()', i:'len()', b:1},
+  {t:'append', i:'.append()', b:1},
+  {t:'f""', i:'f""', b:1},
+  {t:'引号', i:'""', b:1},
+  {t:'冒号', i:':', b:0},
+  {t:'=', i:' = ', b:0},
+  {t:'==', i:' == ', b:0},
+  {t:'+', i:' + ', b:0},
+  {t:'-', i:' - ', b:0},
+  {t:'*', i:' * ', b:0},
+  {t:'/', i:' / ', b:0},
+  {t:'[ ]', i:'[]', b:1},
+  {t:'{ }', i:'{}', b:1},
+  {t:'逗号', i:', ', b:0},
+  {t:'缩进', i:'    ', b:0}
+];
+
+function insertText(text, back){
+  var s = codeEl.selectionStart;
+  var e = codeEl.selectionEnd;
+  var v = codeEl.value;
+  codeEl.value = v.slice(0, s) + text + v.slice(e);
+  var pos = s + text.length - (back || 0);
+  codeEl.setSelectionRange(pos, pos);
+  codeEl.focus();
+  saveDraft();
+}
+
+function buildSnips(){
+  var wrap = document.getElementById('snips');
+  SNIPS.forEach(function(s){
+    var b = document.createElement('button');
+    b.className = 'snip' + (s.hl ? ' hl' : '');
+    b.textContent = s.t;
+    b.addEventListener('click', function(){ insertText(s.i, s.b); });
+    wrap.appendChild(b);
+  });
+}
+
+codeEl.addEventListener('keydown', function(ev){
+  if (ev.key === 'Enter'){
+    var s = codeEl.selectionStart;
+    if (s !== codeEl.selectionEnd) return;
+    var before = codeEl.value.slice(0, s);
+    var lineStart = before.lastIndexOf('\n') + 1;
+    var line = before.slice(lineStart);
+    var indent = (line.match(/^[ \t]*/) || [''])[0];
+    var extra = /:[ \t]*$/.test(line) ? '    ' : '';
+    ev.preventDefault();
+    insertText('\n' + indent + extra, 0);
+  } else if (ev.key === 'Tab'){
+    ev.preventDefault();
+    insertText('    ', 0);
+  }
+});
+
+/* =========================================================
+   14. 事件绑定
+   ========================================================= */
+document.getElementById('btnRun').addEventListener('click', run);
+document.getElementById('btnReset').addEventListener('click', function(){
+  if (!confirm('把代码还原成这一关的初始样子？')) return;
+  var p = ps();
+  delete p.drafts['i' + curIdx];
+  save();
+  codeEl.value = levels[curIdx].starter;
+  hideResult();
+  toast('已还原');
+});
+document.getElementById('btnHint').addEventListener('click', function(){
+  hintEl.hidden = !hintEl.hidden;
+  this.textContent = hintEl.hidden ? '看提示' : '收起提示';
+});
+document.getElementById('rClose').addEventListener('click', hideResult);
+
+document.getElementById('btnPacks').addEventListener('click', openPackSheet);
+document.getElementById('packClose').addEventListener('click', function(){
+  document.getElementById('packSheet').classList.remove('show');
+});
+document.getElementById('btnLevels').addEventListener('click', function(){
+  renderLevelGrid();
+  document.getElementById('lvSheet').classList.add('show');
+});
+document.getElementById('lvClose').addEventListener('click', function(){
+  document.getElementById('lvSheet').classList.remove('show');
+});
+
+document.getElementById('btnStay').addEventListener('click', function(){
+  document.getElementById('clearSheet').classList.remove('show');
+  hideResult();
+});
+document.getElementById('btnNext').addEventListener('click', function(){
+  document.getElementById('clearSheet').classList.remove('show');
+  if (curIdx >= levels.length - 1){
+    toast('这一包已经全部通关，可以换个关卡包或重练');
+    return;
+  }
+  loadLevel(curIdx + 1);
+});
+
+document.getElementById('btnImport').addEventListener('click', function(){
+  document.getElementById('fileInput').click();
+});
+document.getElementById('fileInput').addEventListener('change', function(ev){
+  var f = ev.target.files && ev.target.files[0];
+  if (!f) return;
+  var reader = new FileReader();
+  reader.onload = function(){ importPack(String(reader.result)); };
+  reader.readAsText(f);
+  ev.target.value = '';
+});
+document.getElementById('btnTpl').addEventListener('click', downloadTemplate);
+
+document.getElementById('btnRetry').addEventListener('click', function(){
+  showBoot();
+  bootWorker();
+});
+document.getElementById('btnSkip').addEventListener('click', function(){
+  hideBoot();
+  toast('可以先浏览关卡，引擎好了再运行');
+});
+
+document.addEventListener('visibilitychange', function(){
+  if (document.visibilityState === 'hidden') saveDraft();
+});
+
+/* =========================================================
+   15. 启动
+   ========================================================= */
+function init(){
+  buildSnips();
+  var pk = getPack(store.packId);
+  levels = pk.levels;
+  var p = ps();
+  var idx = p.cur || 0;
+  if (idx > levels.length - 1) idx = 0;
+  loadLevel(idx);
+  switch (store.packId){
+    case 'builtin': break;
+    default: break;
+  }
+  bootWorker();
+}
+init();
+
+})();
+</script>
+</body>
+</html>
