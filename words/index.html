@@ -16,7 +16,7 @@
     background:linear-gradient(180deg,#e7f6ff 0%,#f6fbff 46%,#fff6e8 100%);
     background-attachment:fixed;color:#4a3f55;
     font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
-    display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden;
+    display:flex;flex-direction:column;height:100vh;height:100dvh;overflow-x:hidden;overflow-y:auto;
     user-select:none;
   }
   /* ---------- 飘云 ---------- */
@@ -45,8 +45,8 @@
 
   /* ---------- 地图 ---------- */
   .mapwrap{flex:1;display:grid;place-items:center;padding:10px;min-height:0;overflow:hidden}
-  .map{--ground:#a8de7d;height:min(100%,54vh);width:auto;max-width:100%;aspect-ratio:8/10;display:grid;
-    grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(10,1fr);gap:3px;
+  .map{--ground:#a8de7d;width:100%;max-width:380px;height:auto;aspect-ratio:5/4;display:grid;
+    grid-template-columns:repeat(5,1fr);grid-template-rows:repeat(4,1fr);gap:3px;
     background:#fff;border:3px solid #fff;padding:6px;border-radius:16px;
     box-shadow:0 5px 0 #ffe6ee, 0 12px 26px rgba(140,110,160,.14)}
   .tile{position:relative;border-radius:6px;overflow:hidden;display:grid;place-items:center;
@@ -234,7 +234,11 @@
 (function(){
   "use strict";
   var KEY="pixel_words_v1";
-  var COLS=8, ROWS=10, TILES=COLS*ROWS;
+  var LAYOUTS=[[5,4],[6,4],[6,5],[7,5],[8,5],[8,6]];
+  function layout(r){
+    var L=LAYOUTS[Math.min(r-1, LAYOUTS.length-1)];
+    return {cols:L[0], rows:L[1], tiles:L[0]*L[1]};
+  }
   /* 每格需要答对几题：关卡越高，格子越狠 */
   function perTile(r){ return r<=2 ? 1 : (r<=4 ? 2 : 3); }
   /* 艾宾浩斯复习间隔：1 小时 / 1 天 / 2 天 / 4 天 / 7 天 / 15 天 / 30 天 */
@@ -318,6 +322,8 @@
     if(typeof g.fish!=="number") g.fish=0;
     if(typeof g.pet!=="boolean") g.pet=false;
     if(typeof g.petLv!=="number") g.petLv=0;
+    /* 旧存档的格子数可能大于新地图，进度对不上就从头开始这一关 */
+    if(!g.cleared && g.pos>=layout(g.region).tiles){ g.pos=0; g.step=0; }
     return g;
   }
 
@@ -331,9 +337,13 @@
   function renderMap(){
     var p=prog(), g=pack();
     if(!g) return;
+    var L=layout(p.region), TILES=L.tiles, COLS=L.cols;
     var bio=BIOMES[(p.region-1)%BIOMES.length];
     var map=document.getElementById("map");
     map.style.setProperty("--ground", bio.ground);
+    map.style.aspectRatio=COLS+" / "+L.rows;
+    map.style.gridTemplateColumns="repeat("+COLS+",1fr)";
+    map.style.gridTemplateRows="repeat("+L.rows+",1fr)";
     var curAt=Math.min(p.pos,TILES-1);
     var html="";
     for(var i=0;i<TILES;i++){
@@ -510,7 +520,9 @@
       var inp=document.getElementById("spellIn");
       document.getElementById("spellGo").addEventListener("click",checkSpell);
       inp.addEventListener("keydown",function(e){ if(e.key==="Enter") checkSpell(); });
-      setTimeout(function(){ try{inp.focus();}catch(e){} },120);
+      setTimeout(function(){
+        try{ inp.focus(); inp.scrollIntoView({block:"center"}); }catch(e){}
+      },140);
     }else{
       document.getElementById("opts").addEventListener("click",function(e){
         var b=e.target.closest(".opt"); if(!b||locked) return;
@@ -605,35 +617,27 @@
   }
 
   function advance(ok){
-    var p=prog(), pt=perTile(p.region);
+    var p=prog(), pt=perTile(p.region), L=layout(p.region);
     if(ok){
       p.step++;
       if(p.step>=pt){
         p.step=0;
         p.pos++;
-        if(p.pos>=TILES){
-          p.pos=TILES; p.cleared=true;
+        if(p.pos>=L.tiles){
+          p.pos=L.tiles; p.cleared=true;
           p.petLv=(p.petLv||0)+1;
           p.pet=true;
           save(); locked=false;
           renderMap(); renderBag(); showClear();
           return;
         }
-        if(p.pos%8===0) giveItem(false);
+        if(p.pos%5===0) giveItem(false);
         toast("前进一格 +1");
       }else{
         toast("本格 "+p.step+"/"+pt+" 题，再答对就前进");
       }
     }else{
-      if(p.step>0){
-        p.step--;
-        toast("答错了，本格进度退回一步");
-      }else if(p.pos>0){
-        p.pos--;
-        toast("答错了，后退一格");
-      }else{
-        toast("已在起点，退无可退，这词稍后再考");
-      }
+      toast("答错了，位置不动，这词稍后再考");
     }
     save();
     locked=false;
