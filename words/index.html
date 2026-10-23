@@ -130,6 +130,13 @@
   .actions .btn{flex:1;text-align:center;font-size:14px;padding:10px}
   .file{display:none}
 
+  /* ---------- 通关 ---------- */
+  .panel.clear{text-align:center}
+  .bigstar{width:76px;height:76px;margin:4px auto 8px}
+  .bigstar svg{width:100%;height:100%;image-rendering:pixelated}
+  .clearh{font-size:24px;font-weight:800;color:#ff7f9b;letter-spacing:2px;margin:0 0 8px}
+  .cleartxt{font-size:13px;color:#8a7f9c;line-height:1.9;margin:0 0 4px}
+
   .toast{position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);
     background:#fff;border:2px solid #5bd08c;color:#2f7d55;padding:8px 14px;border-radius:20px;
     font-size:12px;opacity:0;transition:.25s;pointer-events:none;z-index:80;white-space:nowrap;max-width:90vw;
@@ -160,7 +167,7 @@
 
   <div class="empty" id="empty">
     <h2>还没有词包</h2>
-    <p>自己导入一份词表就能开始冒险。进度只存在这台设备，没有排行榜，也没有每日任务。</p>
+    <p>自己导入一份词表就能开始冒险。答对前进一格，答错后退一格；进度只存在这台设备，没有排行榜，也没有每日任务。</p>
     <button class="btn" id="btnImport">导入词包</button>
     <button class="btn ghost" id="btnSample">先用示例词包试试（20 词）</button>
   </div>
@@ -173,6 +180,7 @@
   <div class="panel">
     <h3>设置<span id="closeSettings">关闭</span></h3>
     <div class="hint">词包可以随时切换，进度各自独立保存。</div>
+    <div class="hint" id="dueInfo"></div>
     <div id="packList"></div>
     <div class="actions">
       <button class="btn" id="btnImport2">导入新词包</button>
@@ -199,11 +207,23 @@
   </div>
 </div>
 
+<!-- 通关 -->
+<div class="sheet" id="sheetClear">
+  <div class="panel clear">
+    <div class="bigstar" id="clearStar"></div>
+    <div class="clearh">恭喜通关！</div>
+    <p class="cleartxt" id="clearTxt"></p>
+    <div class="actions"><button class="btn" id="btnNextLevel">进入下一关</button></div>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
   var KEY="pixel_words_v1";
   var COLS=7, ROWS=9, TILES=COLS*ROWS;
+  /* 艾宾浩斯复习间隔：1 小时 / 1 天 / 2 天 / 4 天 / 7 天 / 15 天 / 30 天 */
+  var STEPS=[0, 3600e3, 86400e3, 2*86400e3, 4*86400e3, 7*86400e3, 15*86400e3, 30*86400e3];
 
   var SAMPLE=[
     ["abandon","放弃，抛弃"],["ability","能力，才能"],["abroad","在国外"],["absorb","吸收，吸引"],
@@ -227,6 +247,7 @@
     flower:["........","..K...K.","...KKK..","..KKKKK.","...KKK..","....G...","....G...","........"],
     rock:["........","..AAA...",".AAAAA..","AAAAAAA.",".AAAAAA.","AAAAAAA.","..AAA...","........"],
     chest:["........",".YYYYYY.","YCCCCCCY","YCYYYYCY","YCCCCCCY","YCCCCCCY",".YYYYYY.","........"],
+    star:["...YY...","..YYYY..","YYYYYYYY",".YYYYYY.","..YYYY..",".YYYYYY.","YY....YY","........"],
     mob:["........",".PP..PP.",".PPPPPP.",".PWPPWP.",".PPPPPP.",".PPPPPP.","..PPPP..","........"]
   };
   var PAL={H:"#ff9aa8",S:"#ffe3c8",B:"#7cc9f0",G:"#4fb87a",T:"#a8764f",K:"#ff9ec4",
@@ -272,6 +293,11 @@
     if(!g.items) g.items=[];
     if(!g.seen) g.seen={};
     if(!g.wrong) g.wrong={};
+    if(!g.mem) g.mem={};
+    if(!g.pending) g.pending=[];
+    if(!g.typeBag) g.typeBag=[];
+    if(!g.stat) g.stat={q:0,ok:0,bad:0};
+    if(typeof g.cleared!=="boolean") g.cleared=false;
     return g;
   }
 
@@ -288,18 +314,19 @@
     var bio=BIOMES[(p.region-1)%BIOMES.length];
     var map=document.getElementById("map");
     map.style.setProperty("--ground", bio.ground);
+    var curAt=Math.min(p.pos,TILES-1);
     var html="";
     for(var i=0;i<TILES;i++){
       var r=Math.floor(i/COLS);
       var c=(r%2===0)? (i%COLS) : (COLS-1-(i%COLS));
       var cls="tile ";
-      if(i<p.pos) cls+="explored";
-      else if(i===p.pos) cls+="cur";
-      else if(i===p.pos+1) cls+="next";
+      if(i<curAt) cls+="explored";
+      else if(i===curAt) cls+="cur";
+      else if(i===curAt+1 && !p.cleared) cls+="next";
       else cls+="fog";
 
       var inner="";
-      if(i===p.pos){ inner=sprite("player"); }
+      if(i===curAt){ inner=sprite("player"); }
       else {
         var hv=hash(p.region*97+7, i);
         if(hv>0.78){
@@ -312,7 +339,7 @@
     }
     map.innerHTML=html;
 
-    document.getElementById("sub").textContent="第 "+p.region+" 区 · "+bio.name+" · 已探索 "+p.pos+" 格";
+    document.getElementById("sub").textContent="第 "+p.region+" 关 · "+bio.name+" · 已探索 "+Math.min(p.pos,TILES)+" / "+TILES+" 格";
   }
 
   function renderBag(){
@@ -323,28 +350,65 @@
     }).join("");
   }
 
-  /* ---------------- 出题 ---------------- */
-  function seenCount(w){ var p=prog(); return (p.seen[w]||0); }
-
-  function pickWord(){
-    var ws=pack().words, best=null, bestS=99;
-    for(var k=0;k<26;k++){
-      var w=ws[Math.floor(Math.random()*ws.length)];
-      if(lastWords.indexOf(w.w)>=0 && ws.length>6) continue;
-      var s=seenCount(w.w);
-      if(s<bestS){ best=w; bestS=s; if(s===0) break; }
-    }
-    if(!best) best=ws[Math.floor(Math.random()*ws.length)];
-    return best;
+  /* ---------------- 出题：艾宾浩斯调度 ---------------- */
+  function findWord(k){
+    var ws=pack().words;
+    for(var i=0;i<ws.length;i++) if(ws[i].w===k) return ws[i];
+    return null;
   }
 
+  function pickWord(){
+    var p=prog(), ws=pack().words, now=Date.now();
+    /* 1. 本局答错的词：排队几题后必现 */
+    for(var i=0;i<p.pending.length;i++){
+      if(p.pending[i].in<=0){
+        var pw=findWord(p.pending[i].w);
+        p.pending.splice(i,1);
+        if(pw) return pw;
+        i--;
+      }
+    }
+    /* 2. 按遗忘曲线到期 / 3. 还没学过的新词 */
+    var due=[], fresh=[], rest=[];
+    for(var j=0;j<ws.length;j++){
+      var m=p.mem[ws[j].w];
+      if(!m) fresh.push(ws[j]);
+      else if((m.due||0)<=now) due.push({w:ws[j], t:m.due||0});
+      else rest.push({w:ws[j], t:m.due||0});
+    }
+    due.sort(function(a,b){ return a.t-b.t; });
+    var pool=null;
+    if(due.length && (Math.random()<0.78 || !fresh.length)) pool=due.map(function(o){ return o.w; });
+    else if(fresh.length) pool=fresh;
+    else if(due.length) pool=due.map(function(o){ return o.w; });
+    if(!pool || !pool.length){
+      rest.sort(function(a,b){ return a.t-b.t; });
+      pool=rest.slice(0,5).map(function(o){ return o.w; });
+    }
+    var cand=pool.filter(function(w){ return lastWords.indexOf(w.w)<0; });
+    if(!cand.length) cand=pool;
+    if(!cand.length) cand=ws;
+    return cand[Math.floor(Math.random()*cand.length)];
+  }
+
+  /* 题型按关卡配比，洗成牌堆轮流发，保证轮番出现 */
+  function typeWeights(r){
+    if(r<=1) return [["en2cn",10]];
+    if(r===2) return [["en2cn",7],["cn2en",3]];
+    if(r===3) return [["en2cn",5],["cn2en",4],["spell",1]];
+    if(r<=5) return [["en2cn",4],["cn2en",4],["spell",2]];
+    return [["en2cn",3],["cn2en",4],["spell",3]];
+  }
   function qtype(){
-    var p=prog(), r=p.region, x=Math.random();
-    if(r<=1) return "en2cn";
-    if(r===2) return x<0.65?"en2cn":"cn2en";
-    if(x<0.42) return "en2cn";
-    if(x<0.78) return "cn2en";
-    return "spell";
+    var p=prog();
+    if(!p.typeBag.length){
+      var bag=[], w=typeWeights(p.region);
+      for(var i=0;i<w.length;i++){
+        for(var k=0;k<w[i][1];k++) bag.push(w[i][0]);
+      }
+      p.typeBag=shuffle(bag);
+    }
+    return p.typeBag.pop();
   }
 
   function shuffle(a){
@@ -353,8 +417,9 @@
   }
 
   function buildQ(){
-    var ws=pack().words;
+    var p=prog(), ws=pack().words;
     if(!ws.length) return null;
+    for(var q0=0;q0<p.pending.length;q0++) p.pending[q0].in--;
     var type=qtype();
     var word=pickWord();
     var q={type:type,word:word};
@@ -367,8 +432,10 @@
 
     var field = (type==="en2cn") ? "m" : "w";
     var correct = word[field];
+    var nOpt = p.region<=2 ? 4 : (p.region<=4 ? 5 : 6);
+    if(nOpt>ws.length) nOpt=ws.length;
     var opts=[correct], guard=0;
-    while(opts.length<4 && guard++<200){
+    while(opts.length<nOpt && guard++<300){
       var cand=ws[Math.floor(Math.random()*ws.length)][field];
       if(cand && opts.indexOf(cand)<0) opts.push(cand);
     }
@@ -444,7 +511,7 @@
       locked=true; btn.classList.add("ok");
       fb.className="fb ok"; fb.textContent="正确，前进一格";
       record(true);
-      setTimeout(function(){ advance(); },420);
+      setTimeout(function(){ advance(true); },420);
     }else{
       locked=true; btn.classList.add("no");
       var all=document.querySelectorAll(".opt");
@@ -452,11 +519,11 @@
         if(all[k].textContent===curQ.correct){ all[k].classList.add("ok"); }
         else if(all[k]!==btn){ all[k].classList.add("dim"); }
       }
-      fb.className="fb no"; fb.textContent="正确答案是 "+curQ.correct+"，记住它，继续走";
+      fb.className="fb no"; fb.textContent="正确答案是 "+curQ.correct+" · 后退一格，这词稍后再考";
       document.getElementById("quiz").classList.add("shake");
       setTimeout(function(){ document.getElementById("quiz").classList.remove("shake"); },340);
       record(false);
-      setTimeout(function(){ advance(); },1250);
+      setTimeout(function(){ advance(false); },1250);
     }
   }
 
@@ -472,32 +539,61 @@
       inp.style.borderColor="#3fb950";
       fb.className="fb ok"; fb.textContent="拼对了，前进一格";
       record(true);
-      setTimeout(function(){ advance(); },420);
+      setTimeout(function(){ advance(true); },420);
     }else{
       inp.style.borderColor="#f85149";
-      fb.className="fb no"; fb.textContent="正确拼写："+curQ.answer;
+      fb.className="fb no"; fb.textContent="正确拼写："+curQ.answer+" · 后退一格";
       record(false);
-      setTimeout(function(){ advance(); },1400);
+      setTimeout(function(){ advance(false); },1400);
     }
   }
 
   function record(ok){
-    var p=prog(), w=curQ.word.w;
+    var p=prog(), w=curQ.word.w, now=Date.now();
     p.answered++;
     p.seen[w]=(p.seen[w]||0)+1;
-    if(!ok) p.wrong[w]=(p.wrong[w]||0)+1;
+    p.stat.q++;
+    var m=p.mem[w];
+    if(!m) m=p.mem[w]={n:0,due:0,ok:0,bad:0};
+    if(ok){
+      p.stat.ok++;
+      m.ok++;
+      m.n=Math.min(m.n+1, STEPS.length-1);
+      m.due=now+STEPS[m.n];
+    }else{
+      p.stat.bad++;
+      p.wrong[w]=(p.wrong[w]||0)+1;
+      m.bad++;
+      m.n=Math.max(0,m.n-1);
+      m.due=now+10*60e3;
+      /* 3~7 题之后必然重现 */
+      var dup=false;
+      for(var i=0;i<p.pending.length;i++) if(p.pending[i].w===w){ p.pending[i].in=2; dup=true; }
+      if(!dup) p.pending.push({w:w, in:2+Math.floor(Math.random()*5)});
+      if(p.pending.length>24) p.pending=p.pending.slice(-24);
+    }
     save();
   }
 
-  function advance(){
+  function advance(ok){
     var p=prog();
-    p.pos++;
-    if(p.pos>=TILES){
-      p.region++; p.pos=0;
-      giveItem(true);
-      toast("进入第 "+p.region+" 区 · "+BIOMES[(p.region-1)%BIOMES.length].name);
-    }else if(p.pos%9===0){
-      giveItem(false);
+    if(ok){
+      p.pos++;
+      if(p.pos>=TILES){
+        p.pos=TILES; p.cleared=true;
+        save(); locked=false;
+        renderMap(); renderBag(); showClear();
+        return;
+      }
+      if(p.pos%9===0) giveItem(false);
+      toast("前进一格 +1");
+    }else{
+      if(p.pos>0){
+        p.pos--;
+        toast("答错了，后退一格");
+      }else{
+        toast("已在起点，退无可退，这词稍后再考");
+      }
     }
     save();
     locked=false;
@@ -553,6 +649,15 @@
   /* ---------------- 设置 ---------------- */
   function renderSettings(){
     var box=document.getElementById("packList");
+    var info=document.getElementById("dueInfo");
+    var due=0, learned=0, pk=pack();
+    if(pk && DB.prog[pk.id] && DB.prog[pk.id].mem){
+      var mem=DB.prog[pk.id].mem, now=Date.now();
+      for(var k in mem){ learned++; if((mem[k].due||0)<=now) due++; }
+    }
+    info.textContent = learned
+      ? "艾宾浩斯复习：已记 "+learned+" 词，其中 "+due+" 词到期该复习了。"
+      : "艾宾浩斯复习：开始答题后，每个词会按 1 小时 / 1 天 / 2 天 / 4 天 / 7 天 / 15 天 安排重现。";
     if(!DB.packs.length){ box.innerHTML='<div class="hint">还没有词包。</div>'; return; }
     box.innerHTML=DB.packs.map(function(p){
       var on=p.id===DB.cur?" on":"";
@@ -576,8 +681,23 @@
     };
   }
 
+  function showClear(){
+    var p=prog();
+    document.getElementById("game").style.display="flex";
+    document.getElementById("empty").style.display="none";
+    document.getElementById("clearStar").innerHTML=sprite("star");
+    document.getElementById("clearTxt").innerHTML=
+      "第 "+p.region+" 关已经走完<br>本关答题 "+p.stat.q+" 次 · 答对 "+p.stat.ok+" · 答错 "+p.stat.bad+
+      "<br>下一关选项更多、拼写题更多";
+    document.getElementById("btnNextLevel").textContent="进入第 "+(p.region+1)+" 关";
+    document.getElementById("sheetClear").classList.add("show");
+  }
+
   function renderAll(){
-    renderMap(); renderBag(); renderQuiz();
+    renderMap(); renderBag();
+    var p=prog();
+    if(p && p.cleared){ showClear(); return; }
+    renderQuiz();
   }
 
   function toast(msg){
@@ -650,6 +770,17 @@
     addPack("示例词包", SAMPLE);
     renderAll(); renderSettings();
     toast("示例词包已就位，开始探索");
+  });
+
+  document.getElementById("btnNextLevel").addEventListener("click",function(){
+    var p=prog();
+    p.region++; p.pos=0; p.cleared=false;
+    p.typeBag=[]; p.stat={q:0,ok:0,bad:0};
+    giveItem(true);
+    save();
+    document.getElementById("sheetClear").classList.remove("show");
+    renderMap(); renderBag(); renderQuiz();
+    toast("第 "+p.region+" 关 · "+BIOMES[(p.region-1)%BIOMES.length].name);
   });
 
   document.getElementById("btnExport").addEventListener("click",function(){
