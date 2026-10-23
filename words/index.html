@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="theme-color" content="#12141c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>词汇冒险</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;overscroll-behavior:none}
+  body{
+    background:#12141c;color:#e6e9f2;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden;
+    user-select:none;
+  }
+  header{display:flex;align-items:center;gap:8px;padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top));
+    border-bottom:2px solid #232838;background:#171a24;flex:none}
+  .logo{font-weight:800;font-size:15px;letter-spacing:1px;color:#ffd166}
+  .sub{font-size:11px;color:#7d869b;line-height:1.3}
+  .gear{margin-left:auto;background:#222636;border:2px solid #2f3548;color:#cfd6e6;
+    padding:7px 11px;font-size:13px;border-radius:4px;cursor:pointer}
+  main{flex:1;display:flex;flex-direction:column;min-height:0}
+
+  /* ---------- 地图 ---------- */
+  .mapwrap{flex:1;display:grid;place-items:center;padding:10px;min-height:0;overflow:hidden}
+  .map{--ground:#2b5d3f;height:min(100%,54vh);width:auto;max-width:100%;aspect-ratio:7/9;display:grid;
+    grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(9,1fr);gap:2px;
+    background:#0d0f16;border:2px solid #2a2f42;padding:4px;border-radius:6px;
+    box-shadow:0 0 0 2px #0b0d13, 0 10px 30px rgba(0,0,0,.5)}
+  .tile{position:relative;border-radius:2px;overflow:hidden;display:grid;place-items:center;
+    transition:background .18s}
+  .tile.explored{background:var(--ground);box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+  .tile.cur{background:var(--ground);outline:2px solid #ffd166;outline-offset:-2px;z-index:2}
+  .tile.next{background:var(--ground);filter:brightness(.82)}
+  .tile.fog{background:#0f121b;box-shadow:inset 0 0 0 1px #171b27}
+  .tile svg{width:86%;height:86%;image-rendering:pixelated;pointer-events:none}
+  .tile.fog svg{opacity:.13}
+  .tile.cur svg{animation:bob 1.6s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6%)}}
+
+  /* ---------- 题目卡 ---------- */
+  .quiz{flex:none;padding:10px 12px calc(12px + env(safe-area-inset-bottom));
+    border-top:2px solid #232838;background:#171a24}
+  .qtop{display:flex;justify-content:space-between;font-size:11px;color:#7d869b;margin-bottom:4px}
+  .qtype{color:#7ee787}
+  .prompt{font-size:23px;font-weight:800;text-align:center;margin:6px 0 10px;
+    letter-spacing:.4px;word-break:break-word;line-height:1.25}
+  .prompt small{display:block;font-size:11px;font-weight:400;color:#7d869b;margin-top:4px;letter-spacing:0}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .opt{padding:11px 8px;background:#212636;border:2px solid #2f3548;color:#dfe5f2;
+    font-size:14px;text-align:center;border-radius:5px;min-height:48px;cursor:pointer;
+    line-height:1.25;word-break:break-word;transition:transform .08s}
+  .opt:active{transform:scale(.97)}
+  .opt.ok{background:#17321f;border-color:#3fb950;color:#b7f7c8}
+  .opt.no{background:#3a1d1d;border-color:#f85149;color:#ffc9c9}
+  .opt.dim{opacity:.45}
+  .spell{display:flex;gap:8px}
+  .spell input{flex:1;background:#212636;border:2px solid #2f3548;color:#e6e9f2;
+    font-size:17px;padding:12px;border-radius:5px;outline:none;letter-spacing:1px;min-width:0}
+  .spell input:focus{border-color:#7ee787}
+  .spell button{background:#2f6f4f;border:2px solid #3fb950;color:#eafff2;font-size:15px;
+    padding:0 16px;border-radius:5px;cursor:pointer}
+  .fb{text-align:center;font-size:12px;height:16px;margin-top:6px;color:#7d869b}
+  .fb.ok{color:#7ee787}
+  .fb.no{color:#ff9b9b}
+  .shake{animation:shk .32s}
+  @keyframes shk{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+
+  /* ---------- 空状态 ---------- */
+  .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:12px;padding:24px;text-align:center}
+  .empty h2{margin:0;font-size:18px;color:#ffd166}
+  .empty p{margin:0;font-size:13px;color:#8b93a7;line-height:1.7;max-width:300px}
+  .btn{background:#2f6f4f;border:2px solid #3fb950;color:#eafff2;font-size:15px;
+    padding:11px 20px;border-radius:6px;cursor:pointer}
+  .btn.ghost{background:#222636;border-color:#39405a;color:#cfd6e6;font-size:13px;padding:9px 14px}
+
+  /* ---------- 背包 ---------- */
+  .bag{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;padding:0 12px 6px;min-height:20px}
+  .chip{font-size:11px;color:#ffd166;background:#232636;border:1px solid #3a3f55;
+    padding:2px 7px;border-radius:10px}
+
+  /* ---------- 弹层 ---------- */
+  .sheet{position:fixed;inset:0;background:rgba(6,8,12,.78);display:none;z-index:50;
+    padding:20px 14px;overflow:auto}
+  .sheet.show{display:block}
+  .panel{max-width:440px;margin:6vh auto;background:#171a24;border:2px solid #2f3548;
+    border-radius:8px;padding:16px}
+  .panel h3{margin:0 0 12px;font-size:16px;color:#ffd166;display:flex;align-items:center}
+  .panel h3 span{margin-left:auto;font-size:12px;color:#7d869b;cursor:pointer;font-weight:400}
+  .row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #232838;font-size:13px}
+  .row .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row .cnt{color:#7d869b;font-size:11px}
+  .row button{background:#222636;border:1px solid #39405a;color:#cfd6e6;font-size:12px;
+    padding:5px 9px;border-radius:4px;cursor:pointer}
+  .row button.on{background:#2f6f4f;border-color:#3fb950;color:#eafff2}
+  .field{width:100%;background:#212636;border:2px solid #2f3548;color:#e6e9f2;font-size:13px;
+    padding:10px;border-radius:5px;margin:6px 0 10px;outline:none;font-family:inherit}
+  textarea.field{min-height:120px;resize:vertical;line-height:1.5}
+  .hint{font-size:11px;color:#7d869b;line-height:1.6;margin:4px 0 8px}
+  .actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .actions .btn{flex:1;text-align:center;font-size:14px;padding:10px}
+  .file{display:none}
+
+  .toast{position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);
+    background:#0f2a1c;border:2px solid #3fb950;color:#c8ffd9;padding:8px 14px;border-radius:20px;
+    font-size:12px;opacity:0;transition:.25s;pointer-events:none;z-index:80;white-space:nowrap;max-width:90vw}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">词汇冒险</div>
+    <div class="sub" id="sub">本地存档 · 随时退出</div>
+  </div>
+  <button class="gear" id="btnGear">设置</button>
+</header>
+
+<main>
+  <div id="game" style="display:none;flex:1;flex-direction:column;min-height:0">
+    <div class="mapwrap"><div class="map" id="map"></div></div>
+    <div class="bag" id="bag"></div>
+    <div class="quiz" id="quiz"></div>
+  </div>
+
+  <div class="empty" id="empty">
+    <h2>还没有词包</h2>
+    <p>自己导入一份词表就能开始冒险。进度只存在这台设备，没有排行榜，也没有每日任务。</p>
+    <button class="btn" id="btnImport">导入词包</button>
+    <button class="btn ghost" id="btnSample">先用示例词包试试（20 词）</button>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<!-- 设置 -->
+<div class="sheet" id="sheetSettings">
+  <div class="panel">
+    <h3>设置<span id="closeSettings">关闭</span></h3>
+    <div class="hint">词包可以随时切换，进度各自独立保存。</div>
+    <div id="packList"></div>
+    <div class="actions">
+      <button class="btn" id="btnImport2">导入新词包</button>
+      <button class="btn ghost" id="btnExport">导出备份</button>
+      <button class="btn ghost" id="btnImportBak">导入备份</button>
+    </div>
+    <input type="file" class="file" id="bakFile" accept=".json">
+  </div>
+</div>
+
+<!-- 导入 -->
+<div class="sheet" id="sheetImport">
+  <div class="panel">
+    <h3>导入词包<span id="closeImport">关闭</span></h3>
+    <input class="field" id="packName" placeholder="词包名称，例如：四级核心词">
+    <div class="hint">每行一个词，格式：<b>word 中文释义</b>，逗号/制表符分隔也支持。例：<br>abandon 放弃<br>abandon,放弃</div>
+    <textarea class="field" id="packText" placeholder="把词表粘贴到这里……"></textarea>
+    <div class="actions">
+      <button class="btn" id="btnPickFile">选文件</button>
+      <button class="btn ghost" id="btnDoImport">开始导入</button>
+    </div>
+    <input type="file" class="file" id="wordFile" accept=".txt,.csv">
+    <div class="hint" id="importTip"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var KEY="pixel_words_v1";
+  var COLS=7, ROWS=9, TILES=COLS*ROWS;
+
+  var SAMPLE=[
+    ["abandon","放弃，抛弃"],["ability","能力，才能"],["abroad","在国外"],["absorb","吸收，吸引"],
+    ["abstract","抽象的，摘要"],["accept","接受，同意"],["access","进入，通道"],["accident","事故，意外"],
+    ["account","账户，解释"],["accurate","准确的"],["achieve","实现，达到"],["acquire","获得，学到"],
+    ["adapt","适应，改编"],["admit","承认，准许进入"],["advance","前进，进步"],["affect","影响"],
+    ["afford","负担得起"],["aggressive","有侵略性的"],["alter","改变"],["ambitious","有雄心的"]
+  ].map(function(a){return {w:a[0], m:a[1]};});
+
+  var BIOMES=[
+    {name:"苔原", ground:"#2b5d3f", deco:"tree"},
+    {name:"洞窟", ground:"#3b3550", deco:"rock"},
+    {name:"沙丘", ground:"#5b4a2c", deco:"rock"},
+    {name:"冰原", ground:"#2f4a5c", deco:"tree"},
+    {name:"遗迹", ground:"#4a3c2f", deco:"chest"}
+  ];
+
+  var SPRITES={
+    player:["..HH....","..HH....",".HSSH...",".SSSS...",".BBBB...",".BBBB...",".B..B...",".B..B..."],
+    tree:["...GG...","..GGGG..",".GGGGGG.","GGGGGGGG",".GGGGGG.","...TT...","...TT...","...TT..."],
+    rock:["........","..AAA...",".AAAAA..","AAAAAAA.",".AAAAAA.","AAAAAAA.","..AAA...","........"],
+    chest:["........",".YYYYYY.","YBBBBBBY","YBYYYYBY","YBBBBBBY","YBBBBBBY",".YYYYYY.","........"],
+    mob:["........",".PP..PP.",".PPPPPP.",".PWPPWP.",".PPPPPP.",".PPPPPP.","..PPPP..","........"]
+  };
+  var PAL={H:"#e8b04b",S:"#f3c9a2",B:"#4a90d9",G:"#2f7d45",T:"#6b4b2a",A:"#6b7280",Y:"#d9a441",P:"#8b5cf6",W:"#ffffff"};
+
+  var DB=load();
+  var curQ=null, locked=false, lastWords=[];
+
+  function sprite(name){
+    var rows=SPRITES[name]||[], out="";
+    for(var y=0;y<rows.length;y++){
+      var row=rows[y];
+      for(var x=0;x<row.length;x++){
+        var ch=row.charAt(x);
+        if(ch===".") continue;
+        out+='<rect x="'+x+'" y="'+y+'" width="1" height="1" fill="'+(PAL[ch]||"#888")+'"/>';
+      }
+    }
+    return '<svg viewBox="0 0 8 8" shape-rendering="crispEdges">'+out+'</svg>';
+  }
+
+  function load(){
+    try{
+      var d=JSON.parse(localStorage.getItem(KEY));
+      if(d && d.packs) { if(!d.prog) d.prog={}; return d; }
+    }catch(e){}
+    return {packs:[],cur:null,prog:{},v:1};
+  }
+  function save(){
+    try{ localStorage.setItem(KEY, JSON.stringify(DB)); }
+    catch(e){ toast("存档失败：空间可能已满"); }
+  }
+  function pack(){
+    for(var i=0;i<DB.packs.length;i++) if(DB.packs[i].id===DB.cur) return DB.packs[i];
+    return null;
+  }
+  function prog(){
+    var p=pack(); if(!p) return null;
+    if(!DB.prog[p.id]) DB.prog[p.id]={pos:0,region:1,items:[],answered:0,seen:{},wrong:{}};
+    var g=DB.prog[p.id];
+    if(typeof g.pos!=="number") g.pos=0;
+    if(!g.region) g.region=1;
+    if(!g.items) g.items=[];
+    if(!g.seen) g.seen={};
+    if(!g.wrong) g.wrong={};
+    return g;
+  }
+
+  /* ---------------- 地图 ---------------- */
+  function hash(a,b){
+    var h=(a*374761393 + b*668265263) | 0;
+    h=(h ^ (h>>>13)) * 1274126177 | 0;
+    return ((h ^ (h>>>16)) >>> 0) / 4294967296;
+  }
+
+  function renderMap(){
+    var p=prog(), g=pack();
+    if(!g) return;
+    var bio=BIOMES[(p.region-1)%BIOMES.length];
+    var map=document.getElementById("map");
+    map.style.setProperty("--ground", bio.ground);
+    var html="";
+    for(var i=0;i<TILES;i++){
+      var r=Math.floor(i/COLS);
+      var c=(r%2===0)? (i%COLS) : (COLS-1-(i%COLS));
+      var cls="tile ";
+      if(i<p.pos) cls+="explored";
+      else if(i===p.pos) cls+="cur";
+      else if(i===p.pos+1) cls+="next";
+      else cls+="fog";
+
+      var inner="";
+      if(i===p.pos){ inner=sprite("player"); }
+      else {
+        var hv=hash(p.region*97+7, i);
+        if(hv>0.78){
+          if(!bio.deco || bio.deco==="tree") inner=sprite(hv>0.93?"chest":"tree");
+          else if(bio.deco==="rock") inner=sprite(hv>0.9?"mob":"rock");
+          else inner=sprite(hv>0.9?"chest":"mob");
+        }
+      }
+      html+='<div class="'+cls+'" style="grid-column:'+(c+1)+';grid-row:'+(r+1)+'">'+inner+'</div>';
+    }
+    map.innerHTML=html;
+
+    document.getElementById("sub").textContent="第 "+p.region+" 区 · "+bio.name+" · 已探索 "+p.pos+" 格";
+  }
+
+  function renderBag(){
+    var p=prog(); var bag=document.getElementById("bag");
+    if(!p || !p.items.length){ bag.innerHTML=""; return; }
+    bag.innerHTML=p.items.slice(-6).map(function(it){
+      return '<span class="chip">'+it+"</span>";
+    }).join("");
+  }
+
+  /* ---------------- 出题 ---------------- */
+  function seenCount(w){ var p=prog(); return (p.seen[w]||0); }
+
+  function pickWord(){
+    var ws=pack().words, best=null, bestS=99;
+    for(var k=0;k<26;k++){
+      var w=ws[Math.floor(Math.random()*ws.length)];
+      if(lastWords.indexOf(w.w)>=0 && ws.length>6) continue;
+      var s=seenCount(w.w);
+      if(s<bestS){ best=w; bestS=s; if(s===0) break; }
+    }
+    if(!best) best=ws[Math.floor(Math.random()*ws.length)];
+    return best;
+  }
+
+  function qtype(){
+    var p=prog(), r=p.region, x=Math.random();
+    if(r<=1) return "en2cn";
+    if(r===2) return x<0.65?"en2cn":"cn2en";
+    if(x<0.42) return "en2cn";
+    if(x<0.78) return "cn2en";
+    return "spell";
+  }
+
+  function shuffle(a){
+    for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i];a[i]=a[j];a[j]=t; }
+    return a;
+  }
+
+  function buildQ(){
+    var ws=pack().words;
+    if(!ws.length) return null;
+    var type=qtype();
+    var word=pickWord();
+    var q={type:type,word:word};
+
+    if(type==="spell"){
+      q.prompt=word.m;
+      q.answer=word.w;
+      return q;
+    }
+
+    var field = (type==="en2cn") ? "m" : "w";
+    var correct = word[field];
+    var opts=[correct], guard=0;
+    while(opts.length<4 && guard++<200){
+      var cand=ws[Math.floor(Math.random()*ws.length)][field];
+      if(cand && opts.indexOf(cand)<0) opts.push(cand);
+    }
+    opts=shuffle(opts);
+    q.prompt = (type==="en2cn") ? word.w : word.m;
+    q.options = opts;
+    q.correct = correct;
+    return q;
+  }
+
+  function renderQuiz(){
+    var quiz=document.getElementById("quiz"), g=pack();
+    if(!g){
+      document.getElementById("game").style.display="none";
+      document.getElementById("empty").style.display="flex";
+      return;
+    }
+    document.getElementById("game").style.display="flex";
+    document.getElementById("empty").style.display="none";
+
+    curQ=buildQ();
+    if(!curQ){ quiz.innerHTML='<div class="fb">词包是空的</div>'; return; }
+    lastWords.push(curQ.word.w);
+    if(lastWords.length>8) lastWords.shift();
+
+    var label = curQ.type==="en2cn"?"英 → 中":(curQ.type==="cn2en"?"中 → 英":"拼写");
+    var h='<div class="qtop"><span class="qtype">'+label+'</span><span>已答 '+prog().answered+' 次 · 不计连续</span></div>';
+    h+='<div class="prompt" id="promptBox">'+esc(curQ.prompt)+
+       (curQ.type==="spell"?'<small>提示：'+esc(curQ.answer.charAt(0))+'… 共 '+curQ.answer.length+' 个字母</small>':'')+
+       '</div>';
+
+    if(curQ.type==="spell"){
+      h+='<div class="spell"><input id="spellIn" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="输入英文单词"><button id="spellGo">确认</button></div>';
+    }else{
+      h+='<div class="opts" id="opts">';
+      curQ.options.forEach(function(o,i){
+        h+='<button class="opt" data-i="'+i+'">'+esc(o)+'</button>';
+      });
+      h+='</div>';
+    }
+    h+='<div class="fb" id="fb"></div>';
+    quiz.innerHTML=h;
+
+    if(curQ.type==="spell"){
+      var inp=document.getElementById("spellIn");
+      document.getElementById("spellGo").addEventListener("click",checkSpell);
+      inp.addEventListener("keydown",function(e){ if(e.key==="Enter") checkSpell(); });
+      setTimeout(function(){ try{inp.focus();}catch(e){} },120);
+    }else{
+      document.getElementById("opts").addEventListener("click",function(e){
+        var b=e.target.closest(".opt"); if(!b||locked) return;
+        var i=parseInt(b.getAttribute("data-i"),10);
+        checkChoice(i,b);
+      });
+    }
+  }
+
+  function esc(s){
+    return String(s).replace(/[&<>"]/g,function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];
+    });
+  }
+
+  function norm(s){
+    return String(s||"").toLowerCase().trim().replace(/[^a-z'\- ]/g,"").replace(/\s+/g," ");
+  }
+
+  function checkChoice(i,btn){
+    if(locked) return;
+    var ok = curQ.options[i]===curQ.correct;
+    var fb=document.getElementById("fb");
+    if(ok){
+      locked=true; btn.classList.add("ok");
+      fb.className="fb ok"; fb.textContent="正确，前进一格";
+      record(true);
+      setTimeout(function(){ advance(); },420);
+    }else{
+      locked=true; btn.classList.add("no");
+      var all=document.querySelectorAll(".opt");
+      for(var k=0;k<all.length;k++){
+        if(all[k].textContent===curQ.correct){ all[k].classList.add("ok"); }
+        else if(all[k]!==btn){ all[k].classList.add("dim"); }
+      }
+      fb.className="fb no"; fb.textContent="正确答案是 "+curQ.correct+"，记住它，继续走";
+      document.getElementById("quiz").classList.add("shake");
+      setTimeout(function(){ document.getElementById("quiz").classList.remove("shake"); },340);
+      record(false);
+      setTimeout(function(){ advance(); },1250);
+    }
+  }
+
+  function checkSpell(){
+    if(locked) return;
+    var inp=document.getElementById("spellIn");
+    var val=norm(inp.value);
+    if(!val) return;
+    var ok = val===norm(curQ.answer);
+    var fb=document.getElementById("fb");
+    locked=true;
+    if(ok){
+      inp.style.borderColor="#3fb950";
+      fb.className="fb ok"; fb.textContent="拼对了，前进一格";
+      record(true);
+      setTimeout(function(){ advance(); },420);
+    }else{
+      inp.style.borderColor="#f85149";
+      fb.className="fb no"; fb.textContent="正确拼写："+curQ.answer;
+      record(false);
+      setTimeout(function(){ advance(); },1400);
+    }
+  }
+
+  function record(ok){
+    var p=prog(), w=curQ.word.w;
+    p.answered++;
+    p.seen[w]=(p.seen[w]||0)+1;
+    if(!ok) p.wrong[w]=(p.wrong[w]||0)+1;
+    save();
+  }
+
+  function advance(){
+    var p=prog();
+    p.pos++;
+    if(p.pos>=TILES){
+      p.region++; p.pos=0;
+      giveItem(true);
+      toast("进入第 "+p.region+" 区 · "+BIOMES[(p.region-1)%BIOMES.length].name);
+    }else if(p.pos%9===0){
+      giveItem(false);
+    }
+    save();
+    locked=false;
+    renderMap(); renderBag(); renderQuiz();
+  }
+
+  function giveItem(big){
+    var p=prog();
+    var pool=["火把","宝石","卷轴","蘑菇","钥匙","羽毛","金币"];
+    var it=pool[Math.floor(Math.random()*pool.length)];
+    p.items.push(it);
+    if(p.items.length>24) p.items=p.items.slice(-24);
+    if(big) toast("发现宝箱：获得「"+it+"」");
+  }
+
+  /* ---------------- 导入 ---------------- */
+  function parseWords(text){
+    var out=[], seen={}, lines=text.split(/\r?\n/);
+    for(var i=0;i<lines.length;i++){
+      var line=lines[i].trim();
+      if(!line) continue;
+      if(/^(word|单词|英文|词汇)\s*[,，\t]?/i.test(line) && /(释义|中文|meaning)/i.test(line)) continue;
+      var a="", b="";
+      var sep=line.match(/[\t,，;；]|\s{2,}/);
+      if(sep){
+        var idx=line.indexOf(sep[0]);
+        a=line.slice(0,idx); b=line.slice(idx+sep[0].length);
+      }else{
+        var m=line.match(/^([A-Za-z][A-Za-z'\- ]*?)\s+([\u4e00-\u9fa5][\s\S]*)$/);
+        if(!m) continue;
+        a=m[1]; b=m[2];
+      }
+      a=a.trim(); b=b.trim();
+      if(/[\u4e00-\u9fa5]/.test(a) && !/[\u4e00-\u9fa5]/.test(b)){ var t=a; a=b; b=t; }
+      if(!/[A-Za-z]/.test(a) || !/[\u4e00-\u9fa5]/.test(b)) continue;
+      if(a.length>40) continue;
+      var key=a.toLowerCase();
+      if(seen[key]) continue;
+      seen[key]=1;
+      out.push({w:a, m:b.replace(/\s+/g," ").slice(0,60)});
+    }
+    return out;
+  }
+
+  function addPack(name, words){
+    var id="p"+Date.now().toString(36)+Math.floor(Math.random()*999);
+    DB.packs.push({id:id, name:name, words:words});
+    DB.cur=id;
+    DB.prog[id]={pos:0,region:1,items:[],answered:0,seen:{},wrong:{}};
+    save();
+  }
+
+  /* ---------------- 设置 ---------------- */
+  function renderSettings(){
+    var box=document.getElementById("packList");
+    if(!DB.packs.length){ box.innerHTML='<div class="hint">还没有词包。</div>'; return; }
+    box.innerHTML=DB.packs.map(function(p){
+      var on=p.id===DB.cur?" on":"";
+      return '<div class="row"><span class="name">'+esc(p.name)+'</span>'+
+        '<span class="cnt">'+p.words.length+' 词</span>'+
+        '<button class="'+on.trim()+'" data-cur="'+p.id+'">'+(p.id===DB.cur?"使用中":"切换")+'</button>'+
+        '<button data-del="'+p.id+'">删除</button></div>';
+    }).join("");
+
+    box.onclick=function(e){
+      var cur=e.target.getAttribute("data-cur");
+      var del=e.target.getAttribute("data-del");
+      if(cur){ DB.cur=cur; save(); renderAll(); renderSettings(); toast("已切换词包"); }
+      if(del){
+        if(!confirm("删除这个词包和它的进度？")) return;
+        DB.packs=DB.packs.filter(function(p){ return p.id!==del; });
+        delete DB.prog[del];
+        if(DB.cur===del) DB.cur=DB.packs.length?DB.packs[0].id:null;
+        save(); renderAll(); renderSettings();
+      }
+    };
+  }
+
+  function renderAll(){
+    renderMap(); renderBag(); renderQuiz();
+  }
+
+  function toast(msg){
+    var t=document.getElementById("toast");
+    t.textContent=msg; t.classList.add("show");
+    clearTimeout(t._h);
+    t._h=setTimeout(function(){ t.classList.remove("show"); },1800);
+  }
+
+  /* ---------------- 事件 ---------------- */
+  document.getElementById("btnGear").addEventListener("click",function(){
+    renderSettings(); document.getElementById("sheetSettings").classList.add("show");
+  });
+  document.getElementById("closeSettings").addEventListener("click",function(){
+    document.getElementById("sheetSettings").classList.remove("show");
+  });
+  document.getElementById("sheetSettings").addEventListener("click",function(e){
+    if(e.target===this) this.classList.remove("show");
+  });
+
+  function openImport(){
+    document.getElementById("importTip").textContent="";
+    document.getElementById("sheetImport").classList.add("show");
+  }
+  document.getElementById("btnImport").addEventListener("click",openImport);
+  document.getElementById("btnImport2").addEventListener("click",openImport);
+  document.getElementById("closeImport").addEventListener("click",function(){
+    document.getElementById("sheetImport").classList.remove("show");
+  });
+  document.getElementById("sheetImport").addEventListener("click",function(e){
+    if(e.target===this) this.classList.remove("show");
+  });
+
+  document.getElementById("btnPickFile").addEventListener("click",function(){
+    document.getElementById("wordFile").click();
+  });
+  document.getElementById("wordFile").addEventListener("change",function(e){
+    var f=e.target.files[0]; if(!f) return;
+    f.arrayBuffer().then(function(buf){
+      var txt="";
+      try{ txt=new TextDecoder("utf-8",{fatal:false}).decode(buf); }catch(err){}
+      if(txt.indexOf("\uFFFD")>=0){
+        try{ txt=new TextDecoder("gbk").decode(buf); }catch(err){}
+      }
+      document.getElementById("packText").value=txt;
+      if(!document.getElementById("packName").value){
+        document.getElementById("packName").value=f.name.replace(/\.[^.]+$/,"");
+      }
+      document.getElementById("importTip").textContent="已读取文件，点「开始导入」。";
+    });
+  });
+
+  document.getElementById("btnDoImport").addEventListener("click",function(){
+    var name=document.getElementById("packName").value.trim()||"我的词包";
+    var text=document.getElementById("packText").value;
+    var words=parseWords(text);
+    if(words.length<4){
+      document.getElementById("importTip").textContent="只识别到 "+words.length+" 个词，至少需要 4 个。检查格式：每行「word 中文释义」。";
+      return;
+    }
+    addPack(name, words);
+    document.getElementById("sheetImport").classList.remove("show");
+    document.getElementById("packName").value="";
+    document.getElementById("packText").value="";
+    renderAll(); renderSettings();
+    toast("已导入 "+words.length+" 个词");
+  });
+
+  document.getElementById("btnSample").addEventListener("click",function(){
+    addPack("示例词包", SAMPLE);
+    renderAll(); renderSettings();
+    toast("示例词包已就位，开始探索");
+  });
+
+  document.getElementById("btnExport").addEventListener("click",function(){
+    var blob=new Blob([JSON.stringify(DB)],{type:"application/json"});
+    var a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="词汇冒险备份 "+new Date().toISOString().slice(0,10)+".json";
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); },3000);
+    toast("备份已导出");
+  });
+
+  document.getElementById("btnImportBak").addEventListener("click",function(){
+    document.getElementById("bakFile").click();
+  });
+  document.getElementById("bakFile").addEventListener("change",function(e){
+    var f=e.target.files[0]; if(!f) return;
+    var r=new FileReader();
+    r.onload=function(){
+      try{
+        var d=JSON.parse(r.result);
+        if(!d.packs) throw 0;
+        DB=d; if(!DB.prog) DB.prog={};
+        save(); renderAll(); renderSettings();
+        toast("备份已恢复");
+      }catch(err){ toast("备份文件无法识别"); }
+    };
+    r.readAsText(f);
+  });
+
+  window.addEventListener("beforeunload",save);
+
+  /* ---------------- 启动 ---------------- */
+  renderAll(); renderSettings();
+  if(!pack()){
+    document.getElementById("game").style.display="none";
+    document.getElementById("empty").style.display="flex";
+  }
+})();
+</script>
+</body>
+</html>
